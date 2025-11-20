@@ -1,5 +1,5 @@
 
-export type Module = 'resumen' | 'gastos' | 'proyectos' | 'viaje' | 'deudas' | 'configuracion';
+export type Module = 'resumen' | 'gastos' | 'metas' | 'viaje' | 'deudas' | 'configuracion' | 'proyectos';
 
 // Config - The single source of truth
 export interface SavingsGoal {
@@ -22,6 +22,32 @@ export interface BudgetVariableEgreso {
     category: string;
 }
 
+export interface FinancialGoalLog {
+    id: string;
+    date: string;
+    amount: number;
+    note?: string;
+}
+
+export interface FinancialGoal {
+    id: string;
+    name: string;
+    targetAmount: number;
+    currentAmount: number;
+    notes: string;
+    logs: FinancialGoalLog[];
+}
+
+export interface Debt {
+    id: string;
+    name: string;
+    totalAmount: number;
+    paidAmount: number;
+    installments: number; // cuotas
+    interestRate: number; // Tasa E.A. (Anual)
+    notes: string;
+}
+
 export interface ProjectExpense {
     id: string;
     desc: string;
@@ -31,17 +57,8 @@ export interface ProjectExpense {
 export interface Project {
     id: string;
     name: string;
-    expenses: ProjectExpense[];
     abono: number;
-}
-
-export interface Debt {
-    id: string;
-    name: string;
-    totalAmount: number;
-    paidAmount: number;
-    installments: number; // cuotas
-    notes: string;
+    expenses: ProjectExpense[];
 }
 
 export interface ConfigData {
@@ -54,41 +71,11 @@ export interface ConfigData {
         ingresos: BudgetVariableIngreso[];
         egresos: BudgetVariableEgreso[];
     };
-    projects: Project[];
+    financialGoals: FinancialGoal[]; // Replaces projects
     debts: Debt[];
+    projects: Project[];
 }
 
-
-// Gastos Module
-export interface Ingreso {
-    id: string;
-    desc: string;
-    monto: number;
-    projectId?: string; // Link to a specific project
-}
-
-// Changed from union type to string to allow custom categories
-export type EgresoCategory = string;
-
-export interface Egreso {
-    id: string;
-    desc: string;
-    monto: number;
-    pagado: boolean;
-    category: EgresoCategory;
-    debtId?: string; // Link to a specific debt
-}
-
-export interface Quincena {
-    ingresos: Ingreso[];
-    egresos: Egreso[];
-    ahorros: number;
-}
-
-export interface GastosData {
-    q1: Quincena;
-    q2: Quincena;
-}
 
 // Viaje Module
 export interface Participant {
@@ -115,4 +102,36 @@ export interface ViajeData {
         eliza: Abono[];
         camilo: Abono[];
     };
+}
+
+
+// Gastos Module
+export interface Ingreso {
+    id: string;
+    desc: string;
+    monto: number;
+    projectId?: string; // Optional legacy link
+}
+
+// Changed from union type to string to allow custom categories
+export type EgresoCategory = string;
+
+export interface Egreso {
+    id: string;
+    desc: string;
+    monto: number;
+    pagado: boolean;
+    category: EgresoCategory;
+    debtId?: string; // Link to a specific debt
+}
+
+export interface Quincena {
+    ingresos: Ingreso[];
+    egresos: Egreso[];
+    ahorros: number;
+}
+
+export interface GastosData {
+    q1: Quincena;
+    q2: Quincena;
 }

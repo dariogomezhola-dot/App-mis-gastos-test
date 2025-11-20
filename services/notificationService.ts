@@ -10,9 +10,9 @@ import emailjs from '@emailjs/browser';
  * public_key: Lo obtienes en la sección "Account".
  */
 
-// TODO: Reemplaza SERVICE_ID y TEMPLATE_ID con los de tu cuenta de EmailJS
+// TODO: Reemplaza SERVICE_ID con el de tu cuenta de EmailJS
 const EMAILJS_SERVICE_ID = 'YOUR_SERVICE_ID'; 
-const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+const EMAILJS_TEMPLATE_ID = 'template_thiiheh';
 const EMAILJS_PUBLIC_KEY: string = 'HAv9sbmgXAal7JKMI'; // Tu llave pública configurada
 
 let isInitialized = false;

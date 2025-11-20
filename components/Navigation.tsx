@@ -1,7 +1,7 @@
 
 import React from 'react';
 import type { Module } from '../types';
-import { HomeIcon, DollarSignIcon, BriefcaseIcon, PlaneIcon, CreditCardIcon, MenuIcon, XIcon, SettingsIcon } from './Icons';
+import { HomeIcon, DollarSignIcon, TargetIcon, CreditCardIcon, MenuIcon, XIcon, SettingsIcon } from './Icons';
 
 interface NavItemProps {
     icon: React.ReactNode;
@@ -39,8 +39,7 @@ const Navigation: React.FC<NavigationProps> = ({ activeEntityName, onSwitchEntit
     const navItems: { id: Module; label: string; icon: React.ReactNode }[] = [
         { id: 'resumen', label: 'Resumen General', icon: <HomeIcon className="w-5 h-5" /> },
         { id: 'gastos', label: 'Gastos', icon: <DollarSignIcon className="w-5 h-5" /> },
-        { id: 'proyectos', label: 'Proyectos', icon: <BriefcaseIcon className="w-5 h-5" /> },
-        { id: 'viaje', label: 'Viaje', icon: <PlaneIcon className="w-5 h-5" /> },
+        { id: 'metas', label: 'Metas', icon: <TargetIcon className="w-5 h-5" /> },
         { id: 'deudas', label: 'Deudas', icon: <CreditCardIcon className="w-5 h-5" /> },
         { id: 'configuracion', label: 'Configuración', icon: <SettingsIcon className="w-5 h-5" /> },
     ];

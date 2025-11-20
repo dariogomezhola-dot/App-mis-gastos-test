@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useFirestoreDoc } from '../hooks/useFirestoreDoc';
 import { initialConfigData } from '../data/initialData';
-import type { ConfigData, BudgetVariableIngreso, BudgetVariableEgreso, Debt, Project, SavingsGoal } from '../types';
+import type { ConfigData, BudgetVariableIngreso, BudgetVariableEgreso, Debt, FinancialGoal, SavingsGoal } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { Card } from '../components/common/Card';
 import { Spinner } from '../components/common/Spinner';
@@ -36,10 +36,10 @@ function EditableForm<T extends { id: string, name?: string }>({ item, onSave, o
     return (
         <form onSubmit={handleSave}>
              <Card className="my-2 border border-blue-500/50">
-                <div className="space-y-2">
+                <div className="space-y-4">
                     {children(formState, setFormState)}
                 </div>
-                <div className="flex justify-end space-x-2 mt-4">
+                <div className="flex justify-end space-x-2 mt-4 border-t border-gray-700 pt-2">
                     <button type="submit" className="p-2 text-green-400 hover:text-white"><CheckIcon className="w-5 h-5" /></button>
                     <button type="button" onClick={onCancel} className="p-2 text-red-400 hover:text-white"><XIcon className="w-5 h-5" /></button>
                 </div>
@@ -83,11 +83,11 @@ function ItemList<T extends { id: string }>({ title, items, defaultNewItem, onUp
                 <button onClick={() => setIsAdding(true)} className="bg-blue-500/20 text-blue-400 px-2 py-1 text-xs rounded hover:bg-blue-500/40">+ AÑADIR</button>
             </div>
             <ul>
-                {items.map(item => (
+                {items?.map(item => (
                     editingId === item.id ? (
                         <li key={item.id}>{renderForm(item, handleSave, () => setEditingId(null))}</li>
                     ) : (
-                        <li key={item.id} className="flex justify-between items-center py-2 border-b border-gray-700 group">
+                        <li key={item.id} className="flex justify-between items-center py-3 border-b border-gray-700 group">
                             {renderItem(item)}
                             <div className="flex items-center space-x-2">
                                 <button onClick={() => setEditingId(item.id)} className="p-1 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity hover:text-white"><EditIcon className="w-4 h-4" /></button>
@@ -109,12 +109,21 @@ const BudgetVariableForm: React.FC<{ item: any; onSave: (item: any) => void; onC
         onCancel={onCancel}
         children={(formState, setFormState) => (
              <>
-                <input type="text" placeholder="Nombre" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="bg-gray-600 text-white rounded px-2 py-1 w-full" />
-                <input type="number" placeholder="Monto Total" value={formState.totalAmount} onChange={e => setFormState({...formState, totalAmount: Number(e.target.value)})} className="bg-gray-600 text-white rounded px-2 py-1 w-full" />
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Nombre</label>
+                    <input type="text" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="bg-gray-700 text-white rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none" />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Monto Mensual</label>
+                    <input type="number" value={formState.totalAmount} onChange={e => setFormState({...formState, totalAmount: Number(e.target.value)})} className="bg-gray-700 text-white rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none" />
+                </div>
                  {'category' in formState && (
-                     <select value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} className="bg-gray-600 text-white rounded px-2 py-1 w-full">
-                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
+                     <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Categoría</label>
+                        <select value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} className="bg-gray-700 text-white rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none">
+                            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                    </div>
                 )}
             </>
         )}
@@ -152,54 +161,85 @@ const CategoryList: React.FC<{ categories: string[], onUpdate: (cats: string[]) 
                 ))}
             </div>
             <form onSubmit={handleAdd} className="flex gap-2">
-                <input type="text" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Nueva categoría..." className="bg-gray-600 text-white px-3 py-2 rounded w-full" />
+                <input type="text" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Nueva categoría..." className="bg-gray-700 text-white px-3 py-2 rounded w-full border border-gray-600" />
                 <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Agregar</button>
             </form>
         </Card>
     );
 };
 
-// Render Helpers...
+// Render Helpers
 const renderBudgetVariable = (item: BudgetVariableIngreso | BudgetVariableEgreso) => (
     <div>
-        <span>{item.name}</span>
-        {'category' in item && <span className="text-xs text-gray-500 ml-2 bg-gray-700 px-1 rounded">{item.category}</span>}
-        <span className="font-semibold ml-4">{formatCurrency(item.totalAmount)}</span>
+        <span className="font-medium text-white">{item.name}</span>
+        {'category' in item && <span className="text-xs text-gray-400 ml-2 bg-gray-800 border border-gray-700 px-1.5 py-0.5 rounded">{item.category}</span>}
+        <span className="block text-sm text-gray-400 font-mono mt-1">{formatCurrency(item.totalAmount)}</span>
     </div>
 );
 
 const renderDebt = (item: Debt) => (
     <div>
-        <span className="font-semibold">{item.name}</span>
-        <span className="text-sm text-gray-400 ml-4">{formatCurrency(item.totalAmount)}</span>
+        <span className="font-bold text-white block">{item.name}</span>
+        <span className="text-sm text-gray-400">Total: {formatCurrency(item.totalAmount)}</span>
+        {item.interestRate && <span className="text-xs text-yellow-500 ml-2">({item.interestRate}% EA)</span>}
     </div>
 );
 const DebtForm = ({ item, onSave, onCancel }: any) => (
     <EditableForm item={item} onSave={onSave} onCancel={onCancel} children={(formState, setFormState) => (
         <>
-            <input type="text" placeholder="Nombre" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="bg-gray-600 w-full p-1 rounded mb-1" />
-            <input type="number" placeholder="Total" value={formState.totalAmount} onChange={e => setFormState({...formState, totalAmount: Number(e.target.value)})} className="bg-gray-600 w-full p-1 rounded mb-1" />
-            <input type="number" placeholder="Pagado" value={formState.paidAmount} onChange={e => setFormState({...formState, paidAmount: Number(e.target.value)})} className="bg-gray-600 w-full p-1 rounded mb-1" />
-            <input type="number" placeholder="Cuotas" value={formState.installments} onChange={e => setFormState({...formState, installments: Number(e.target.value)})} className="bg-gray-600 w-full p-1 rounded mb-1" />
-            <textarea placeholder="Notas" value={formState.notes} onChange={e => setFormState({...formState, notes: e.target.value})} className="bg-gray-600 w-full p-1 rounded" />
+            <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Nombre Entidad / Persona</label>
+                <input type="text" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+                <div>
+                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Deuda Total</label>
+                     <input type="number" value={formState.totalAmount} onChange={e => setFormState({...formState, totalAmount: Number(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+                </div>
+                <div>
+                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Ya Pagado</label>
+                     <input type="number" value={formState.paidAmount} onChange={e => setFormState({...formState, paidAmount: Number(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+                <div>
+                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Total Cuotas</label>
+                     <input type="number" value={formState.installments} onChange={e => setFormState({...formState, installments: Number(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+                </div>
+                <div>
+                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tasa Interés Anual (%)</label>
+                     <input type="number" value={formState.interestRate} onChange={e => setFormState({...formState, interestRate: Number(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" placeholder="Ej: 12.5" />
+                </div>
+            </div>
+            <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Notas</label>
+                <textarea value={formState.notes} onChange={e => setFormState({...formState, notes: e.target.value})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white h-20" />
+            </div>
         </>
     )} />
 );
 
-const renderProject = (item: Project) => (<div><span className="font-semibold">{item.name}</span></div>);
-const ProjectForm = ({ item, onSave, onCancel }: any) => (
-    <EditableForm item={item} onSave={onSave} onCancel={onCancel} children={(formState, setFormState) => (
-        <input type="text" placeholder="Nombre" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="bg-gray-600 w-full p-1 rounded" />
-    )} />
+const renderFinancialGoal = (item: FinancialGoal) => (
+    <div>
+        <span className="font-bold text-white">{item.name}</span>
+        <span className="text-sm text-gray-400 block">Meta: {formatCurrency(item.targetAmount)}</span>
+    </div>
 );
-
-const renderSavingsGoal = (item: SavingsGoal) => (<div><span className="font-semibold">{item.name}</span> <span className="text-sm text-gray-400 ml-2">{formatCurrency(item.currentAmount)} / {formatCurrency(item.targetAmount)}</span></div>);
-const SavingsGoalForm = ({ item, onSave, onCancel }: any) => (
+const FinancialGoalForm = ({ item, onSave, onCancel }: any) => (
     <EditableForm item={item} onSave={onSave} onCancel={onCancel} children={(formState, setFormState) => (
         <>
-             <input type="text" placeholder="Nombre" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="bg-gray-600 w-full p-1 rounded mb-1" />
-             <input type="number" placeholder="Actual" value={formState.currentAmount} onChange={e => setFormState({...formState, currentAmount: Number(e.target.value)})} className="bg-gray-600 w-full p-1 rounded mb-1" />
-             <input type="number" placeholder="Meta" value={formState.targetAmount} onChange={e => setFormState({...formState, targetAmount: Number(e.target.value)})} className="bg-gray-600 w-full p-1 rounded" />
+            <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Nombre de la Meta</label>
+                <input type="text" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+            </div>
+            <div>
+                 <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Monto Objetivo</label>
+                 <input type="number" value={formState.targetAmount} onChange={e => setFormState({...formState, targetAmount: Number(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+            </div>
+            <div>
+                 <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Notas</label>
+                 <input type="text" value={formState.notes} onChange={e => setFormState({...formState, notes: e.target.value})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+            </div>
         </>
     )} />
 );
@@ -246,22 +286,12 @@ const Configuracion: React.FC<ModuleProps> = ({ entityId }) => {
                 <div className="space-y-6">
                     <h2 className="text-2xl font-bold text-white pt-4 border-t border-gray-700">Personalización</h2>
                     <CategoryList categories={categories} onUpdate={(cats) => handleUpdate('categories', cats)} />
-                    
-                    <h2 className="text-2xl font-bold text-white pt-4 border-t border-gray-700">Metas de Ahorro</h2>
-                    <ItemList
-                        title="Lista de Metas"
-                        items={data.savingsGoals}
-                        defaultNewItem={{ id: 'new', name: '', targetAmount: 0, currentAmount: 0 }}
-                        onUpdate={(items) => handleUpdate('savingsGoals', items)}
-                        renderItem={renderSavingsGoal}
-                        renderForm={(item, onSave, onCancel) => <SavingsGoalForm item={item} onSave={onSave} onCancel={onCancel} />}
-                    />
                 </div>
                 
                 <div className="space-y-6">
                      <h2 className="text-2xl font-bold text-white pt-4 border-t border-gray-700">Presupuesto Mensual</h2>
                      <ItemList
-                        title="Ingresos Mensuales"
+                        title="Ingresos Mensuales Fijos"
                         items={data.budgetVariables.ingresos}
                         defaultNewItem={{ id: 'new', name: '', totalAmount: 0 }}
                         onUpdate={(items) => handleUpdateVariables('ingresos', items)}
@@ -284,19 +314,19 @@ const Configuracion: React.FC<ModuleProps> = ({ entityId }) => {
                 <ItemList
                     title="Deudas Grandes"
                     items={data.debts}
-                    defaultNewItem={{ id: 'new', name: '', totalAmount: 0, paidAmount: 0, installments: 0, notes: '' }}
+                    defaultNewItem={{ id: 'new', name: '', totalAmount: 0, paidAmount: 0, installments: 0, interestRate: 0, notes: '' }}
                     onUpdate={(items) => handleUpdate('debts', items)}
                     renderItem={renderDebt}
                     renderForm={(item, onSave, onCancel) => <DebtForm item={item} onSave={onSave} onCancel={onCancel} />}
                 />
 
                 <ItemList
-                    title="Proyectos"
-                    items={data.projects}
-                    defaultNewItem={{ id: 'new', name: '', expenses: [], abono: 0 }}
-                    onUpdate={(items) => handleUpdate('projects', items)}
-                    renderItem={renderProject}
-                    renderForm={(item, onSave, onCancel) => <ProjectForm item={item} onSave={onSave} onCancel={onCancel} />}
+                    title="Metas Financieras"
+                    items={data.financialGoals || []}
+                    defaultNewItem={{ id: 'new', name: '', targetAmount: 0, currentAmount: 0, notes: '', logs: [] }}
+                    onUpdate={(items) => handleUpdate('financialGoals', items)}
+                    renderItem={renderFinancialGoal}
+                    renderForm={(item, onSave, onCancel) => <FinancialGoalForm item={item} onSave={onSave} onCancel={onCancel} />}
                 />
             </div>
         </div>

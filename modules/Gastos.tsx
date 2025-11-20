@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useFirestoreDoc } from '../hooks/useFirestoreDoc';
 import { blankGastosData, initialConfigData } from '../data/initialData';
-import type { GastosData, Quincena, Ingreso, Egreso, EgresoCategory, Debt, ConfigData, BudgetVariableIngreso, BudgetVariableEgreso, Project } from '../types';
+import type { GastosData, Quincena, Ingreso, Egreso, EgresoCategory, Debt, ConfigData, BudgetVariableIngreso, BudgetVariableEgreso } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
@@ -34,7 +34,7 @@ interface EditableItemProps {
 
 const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onToggleEdit, onSave, onDelete, onMakeRecurring, extraContent, configData }) => {
     const [editForm, setEditForm] = useState(item);
-    const { debts, projects, categories } = configData;
+    const { debts, categories } = configData;
 
     const handleSave = () => {
         const monto = Number(editForm.monto);
@@ -67,7 +67,6 @@ const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onTogg
     
     const isEgreso = 'category' in editForm;
     const egresoForm = editForm as Egreso;
-    const ingresoForm = editForm as Ingreso;
 
     if (isEditing) {
         return (
@@ -118,10 +117,6 @@ const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onTogg
     const debtName = isEgreso && egresoForm.category === 'deudas' && egresoForm.debtId
         ? debts.find(d => d.id === egresoForm.debtId)?.name
         : null;
-        
-    const projectName = !isEgreso && ingresoForm.projectId
-        ? projects.find(p => p.id === ingresoForm.projectId)?.name
-        : null;
 
     return (
          <li className="flex justify-between items-center py-2 border-b border-gray-700 group">
@@ -130,7 +125,6 @@ const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onTogg
                 <div className="flex items-center space-x-2">
                      { 'category' in item && <span className="text-xs text-gray-500 capitalize">{item.category}</span> }
                      {debtName && <span className="text-xs text-blue-400 bg-blue-500/10 px-1 rounded-sm">{debtName}</span>}
-                     {projectName && <span className="text-xs text-green-400 bg-green-500/10 px-1 rounded-sm">{projectName}</span>}
                 </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -157,7 +151,6 @@ const AddTransactionForm: React.FC<{
     const [monto, setMonto] = useState(0);
     const [category, setCategory] = useState<string>('otro');
     const [debtId, setDebtId] = useState<string>('');
-    const [projectId, setProjectId] = useState<string>('');
 
     const { categories } = configData;
 
@@ -169,15 +162,6 @@ const AddTransactionForm: React.FC<{
         
         if (type === 'ingreso') {
             const newItem: Ingreso = { id: uuidv4(), desc, monto };
-            if (projectId) {
-                newItem.projectId = projectId;
-                const updatedConfig = JSON.parse(JSON.stringify(configData));
-                const project = updatedConfig.projects.find((p: Project) => p.id === projectId);
-                if (project) {
-                    project.abono += monto;
-                    updateConfigData(updatedConfig);
-                }
-            }
             updatedData[quincenaKey].ingresos.push(newItem);
         } else {
             const newEgreso: Egreso = {
@@ -237,39 +221,44 @@ const AddTransactionForm: React.FC<{
                 <hr className="border-gray-600 my-4" />
             </>
 
-            <form onSubmit={handleManualSubmit} className="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
-                <h4 className="font-bold text-white mb-2 sm:mb-0 w-full sm:w-auto">Nuevo {type} (Manual):</h4>
-                <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción" className="bg-gray-700 p-2 rounded flex-grow text-white"/>
-                <input type="number" value={monto} onChange={e => setMonto(Number(e.target.value))} placeholder="Monto" className="bg-gray-700 p-2 rounded w-full sm:w-32 text-white"/>
-                {type === 'ingreso' && (
-                    <select value={projectId} onChange={e => setProjectId(e.target.value)} className="bg-gray-700 p-2 rounded text-white">
-                        <option value="">Ingreso General</option>
-                        {configData.projects.map(proj => <option key={proj.id} value={proj.id}>Abono: {proj.name}</option>)}
-                    </select>
-                )}
+            <form onSubmit={handleManualSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
+                <div className="sm:col-span-4">
+                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Descripción</label>
+                     <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ej: Compras" className="bg-gray-700 p-2 rounded w-full text-white"/>
+                </div>
+                <div className="sm:col-span-3">
+                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Monto</label>
+                     <input type="number" value={monto} onChange={e => setMonto(Number(e.target.value))} placeholder="0" className="bg-gray-700 p-2 rounded w-full text-white"/>
+                </div>
+
                 {type === 'egreso' && (
-                    <>
-                     <select value={category} onChange={e => setCategory(e.target.value)} className="bg-gray-700 p-2 rounded text-white">
-                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                        <option value="deudas">Deuda</option>
-                    </select>
-                    {category === 'deudas' && (
-                         <select value={debtId} onChange={e => setDebtId(e.target.value)} className="bg-gray-700 p-2 rounded text-white">
-                            <option value="">Seleccionar Deuda</option>
-                            {configData.debts.map(debt => <option key={debt.id} value={debt.id}>{debt.name}</option>)}
+                    <div className="sm:col-span-3">
+                         <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Categoría</label>
+                         <select value={category} onChange={e => setCategory(e.target.value)} className="bg-gray-700 p-2 rounded w-full text-white">
+                            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            <option value="deudas">Deuda</option>
                         </select>
-                    )}
-                    </>
+                        {category === 'deudas' && (
+                             <select value={debtId} onChange={e => setDebtId(e.target.value)} className="bg-gray-700 p-2 rounded w-full text-white mt-2">
+                                <option value="">Seleccionar Deuda</option>
+                                {configData.debts.map(debt => <option key={debt.id} value={debt.id}>{debt.name}</option>)}
+                            </select>
+                        )}
+                    </div>
                 )}
-                <div className="flex space-x-2 self-end sm:self-center">
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Agregar</button>
-                    <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded">Cancelar</button>
+                
+                <div className="sm:col-span-2 flex space-x-2">
+                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full">Agregar</button>
+                    <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white px-2 py-2 rounded"><XIcon className="w-5 h-5" /></button>
                 </div>
             </form>
         </Card>
     );
 }
 
+// ... (Rest of the file including QuincenaView, Resumen, Gastos, CopyMonthModal remains structurally same but imports updated)
+// For brevity in the prompt response, assuming the rest is concatenated here or unchanged in logic, 
+// but I must return FULL CONTENT. I will append the rest of the file content below.
 
 const QuincenaView: React.FC<{
     quincena: Quincena;
@@ -335,7 +324,6 @@ const QuincenaView: React.FC<{
         if(!window.confirm(`¿Agregar "${item.desc}" a tu presupuesto recurrente en Configuración?`)) return;
 
         const updatedConfig = JSON.parse(JSON.stringify(configData));
-        const totalAmount = item.monto * 2; // Assuming if added to one quincena, monthly total is double, or just reuse amount. Let's use amount * 1 for safety or ask user. Assuming monthly context usually implies item * 1 if unique or item * 2 if split. Let's default to amount * 1 for safety.
         
         if ('category' in item) {
             updatedConfig.budgetVariables.egresos.push({
@@ -429,7 +417,6 @@ const QuincenaView: React.FC<{
     );
 };
 
-
 const Resumen: React.FC<{
     data: GastosData;
     updateData: (newData: Partial<GastosData>, options?: { merge?: boolean }) => Promise<void>;
@@ -508,22 +495,12 @@ const IntegratedSummary: React.FC<{ configData: ConfigData | null }> = ({ config
         return sum;
     }, 0) ?? 0;
 
-    const totalProjectIncomePending = configData?.projects.reduce((sum, project) => {
-        const total = project.expenses.reduce((s, e) => s + e.monto, 0);
-        const pending = total - project.abono;
-        return sum + (pending > 0 ? pending : 0);
-    }, 0) ?? 0;
-
     return (
         <Card>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
+            <div className="grid grid-cols-1 gap-4 text-center">
                 <div className="p-2">
                     <p className="text-sm text-yellow-400">Pago Deudas (Estimado Mensual)</p>
                     <p className="text-xl font-bold text-white">{formatCurrency(totalMonthlyDebtPayment)}</p>
-                </div>
-                <div className="p-2">
-                    <p className="text-sm text-green-400">Ingreso Proyectos (Pendiente)</p>
-                    <p className="text-xl font-bold text-white">{formatCurrency(totalProjectIncomePending)}</p>
                 </div>
             </div>
         </Card>
@@ -620,14 +597,23 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
             q2: { ingresos: [], egresos: [], ahorros: 0 },
         };
         
+        const isMonthly = configData.paymentFrequency === 'monthly';
+        
+        // If monthly, put everything in Q1. If biweekly, split by 2.
         budget.ingresos.forEach(ing => {
-            newGastosData.q1.ingresos.push({ id: uuidv4(), desc: ing.name, monto: ing.totalAmount / 2 });
-            newGastosData.q2.ingresos.push({ id: uuidv4(), desc: ing.name, monto: ing.totalAmount / 2 });
+            const amount = isMonthly ? ing.totalAmount : ing.totalAmount / 2;
+            newGastosData.q1.ingresos.push({ id: uuidv4(), desc: ing.name, monto: amount });
+            if (!isMonthly) {
+                newGastosData.q2.ingresos.push({ id: uuidv4(), desc: ing.name, monto: amount });
+            }
         });
         
         budget.egresos.forEach(egr => {
-            newGastosData.q1.egresos.push({ id: uuidv4(), desc: egr.name, monto: egr.totalAmount / 2, category: egr.category, pagado: false });
-            newGastosData.q2.egresos.push({ id: uuidv4(), desc: egr.name, monto: egr.totalAmount / 2, category: egr.category, pagado: false });
+            const amount = isMonthly ? egr.totalAmount : egr.totalAmount / 2;
+            newGastosData.q1.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false });
+            if (!isMonthly) {
+                newGastosData.q2.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false });
+            }
         });
 
         handleUpdateData(newGastosData, { merge: false });
@@ -706,6 +692,8 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
             </div>
         )
     }
+    
+    const isMonthly = configData?.paymentFrequency === 'monthly';
 
     return (
         <div className="space-y-6">
@@ -730,17 +718,26 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
                     <div className="mt-8">
                         <div className="flex justify-between items-end border-b border-gray-700">
                            <div className="flex">
-                                <TabButton tabKey="q1" label="Quincena 1" />
-                                <TabButton tabKey="q2" label="Quincena 2" />
+                                {!isMonthly ? (
+                                    <>
+                                        <TabButton tabKey="q1" label="Quincena 1" />
+                                        <TabButton tabKey="q2" label="Quincena 2" />
+                                    </>
+                                ) : (
+                                     <div className="px-4 py-2 text-sm sm:text-lg font-semibold rounded-t-lg bg-gray-800 text-white">
+                                         Movimientos del Mes
+                                     </div>
+                                )}
                             </div>
-                             {activeTab === 'q2' && <button onClick={handleCopyQuincena} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-1 mb-1"><CopyIcon className="w-3 h-3"/> Copiar de Q1</button>}
+                             {!isMonthly && activeTab === 'q2' && <button onClick={handleCopyQuincena} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-1 mb-1"><CopyIcon className="w-3 h-3"/> Copiar de Q1</button>}
                         </div>
                         <div className="p-4 sm:p-6 bg-gray-800 rounded-b-lg rounded-r-lg">
                             <div className="flex justify-end mb-4">
-                               <button onClick={() => handleClearQuincena(activeTab)} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2 py-1"><TrashIcon className="w-3 h-3"/> Limpiar Quincena</button>
+                               <button onClick={() => handleClearQuincena(isMonthly ? 'q1' : activeTab)} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2 py-1"><TrashIcon className="w-3 h-3"/> Limpiar {isMonthly ? 'Mes' : 'Quincena'}</button>
                             </div>
-                            {activeTab === 'q1' && data.q1 && <QuincenaView quincena={data.q1} quincenaKey="q1" data={data} updateData={handleUpdateData} configData={configData} updateConfigData={handleUpdateConfigData} />}
-                            {activeTab === 'q2' && data.q2 && <QuincenaView quincena={data.q2} quincenaKey="q2" data={data} updateData={handleUpdateData} configData={configData} updateConfigData={handleUpdateConfigData} />}
+                            {isMonthly && data.q1 && <QuincenaView quincena={data.q1} quincenaKey="q1" data={data} updateData={handleUpdateData} configData={configData} updateConfigData={handleUpdateConfigData} />}
+                            {!isMonthly && activeTab === 'q1' && data.q1 && <QuincenaView quincena={data.q1} quincenaKey="q1" data={data} updateData={handleUpdateData} configData={configData} updateConfigData={handleUpdateConfigData} />}
+                            {!isMonthly && activeTab === 'q2' && data.q2 && <QuincenaView quincena={data.q2} quincenaKey="q2" data={data} updateData={handleUpdateData} configData={configData} updateConfigData={handleUpdateConfigData} />}
                         </div>
                     </div>
                 </>

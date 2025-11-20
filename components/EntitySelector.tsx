@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Card } from './common/Card';
 import { Spinner } from './common/Spinner';
 import { initialConfigData, businessConfigData } from '../data/initialData';
-import type { ConfigData, BudgetVariableEgreso } from '../types';
+import type { ConfigData, BudgetVariableEgreso, SavingsGoal } from '../types';
 import { HomeIcon, BriefcaseIcon, TrashIcon } from './Icons';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -16,10 +16,11 @@ interface EntitySelectorProps {
   entities: Entity[];
   onSelectEntity: (id: string) => void;
   onCreateEntity: (name: string, template: ConfigData) => Promise<void>;
+  onSignOut: () => void;
   loading: boolean;
 }
 
-type Step = 'name' | 'currency' | 'profile' | 'income' | 'fixed_expenses' | 'creating';
+type Step = 'name' | 'currency' | 'profile' | 'income' | 'fixed_expenses' | 'goals' | 'creating';
 type EntityType = 'personal' | 'business';
 type Currency = 'COP' | 'USD' | 'EUR' | 'MXN';
 
@@ -32,7 +33,7 @@ const formatCurrencyInput = (value: number, currency: Currency) => {
     }).format(value);
 }
 
-export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSelectEntity, onCreateEntity, loading }) => {
+export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSelectEntity, onCreateEntity, onSignOut, loading }) => {
   const [step, setStep] = useState<Step>('name');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
 
@@ -51,6 +52,11 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
   const [fixedExpenses, setFixedExpenses] = useState<BudgetVariableEgreso[]>([]);
   const [newExpenseName, setNewExpenseName] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState<string>('');
+  
+  // Goals State
+  const [goals, setGoals] = useState<SavingsGoal[]>([]);
+  const [newGoalName, setNewGoalName] = useState('');
+  const [newGoalAmount, setNewGoalAmount] = useState<string>('');
 
   const handleStartCreation = () => {
     // Reset state
@@ -63,6 +69,7 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
     setInitialIncome(0);
     setIncomeDisplay('');
     setFixedExpenses([]);
+    setGoals([]);
     setIsWizardOpen(true);
   };
 
@@ -123,6 +130,32 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
   const handleRemoveExpense = (id: string) => {
       setFixedExpenses(fixedExpenses.filter(e => e.id !== id));
   }
+  
+  const handleExpensesSubmit = () => {
+      setStep('goals');
+  }
+
+  const handleAddGoal = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newGoalName || !newGoalAmount) return;
+      const amount = parseInt(newGoalAmount.replace(/\D/g, ''), 10);
+      if (isNaN(amount) || amount <= 0) return;
+
+      const newGoal: SavingsGoal = {
+          id: uuidv4(),
+          name: newGoalName,
+          targetAmount: amount,
+          currentAmount: 0
+      };
+
+      setGoals([...goals, newGoal]);
+      setNewGoalName('');
+      setNewGoalAmount('');
+  }
+
+  const handleRemoveGoal = (id: string) => {
+      setGoals(goals.filter(g => g.id !== id));
+  }
 
   const handleFinish = async () => {
       setStep('creating');
@@ -147,10 +180,13 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
       }
 
       // Set Fixed Expenses
-      // Merge with default examples or replace them? Let's keep defaults if user added none, otherwise mix.
       if (fixedExpenses.length > 0) {
-          // If user added expenses, we append them to the template defaults
           template.budgetVariables.egresos = [...template.budgetVariables.egresos, ...fixedExpenses];
+      }
+      
+      // Set Goals
+      if (goals.length > 0) {
+          template.savingsGoals = [...template.savingsGoals, ...goals];
       }
 
       await onCreateEntity(newEntityName, template);
@@ -168,11 +204,16 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
   // --- Wizard Render ---
   if (isWizardOpen) {
       const progressMap: Record<Step, number> = {
-          'name': 10, 'currency': 30, 'profile': 50, 'income': 70, 'fixed_expenses': 90, 'creating': 100
+          'name': 10, 'currency': 30, 'profile': 50, 'income': 65, 'fixed_expenses': 80, 'goals': 90, 'creating': 100
       };
 
       return (
-          <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+          <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4 relative">
+              <div className="absolute top-4 right-4">
+                 <button onClick={() => setIsWizardOpen(false)} className="text-gray-500 hover:text-white text-sm">
+                     Cancelar
+                 </button>
+              </div>
               <Card className="w-full max-w-lg border-2 border-gray-800">
                   <div className="mb-6">
                       <div className="flex justify-between items-center mb-4">
@@ -182,6 +223,7 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                               {step === 'profile' && 'Detalles de tu perfil'}
                               {step === 'income' && 'Configura tus Ingresos'}
                               {step === 'fixed_expenses' && 'Gastos Fijos Mensuales'}
+                              {step === 'goals' && 'Metas de Ahorro'}
                               {step === 'creating' && 'Finalizando...'}
                            </h2>
                            <div className="text-xs text-gray-500">
@@ -339,7 +381,7 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                   {/* STEP 5: FIXED EXPENSES */}
                   {step === 'fixed_expenses' && (
                       <div className="space-y-6">
-                          <p className="text-sm text-gray-400">Agrega tus gastos fijos (Arriendo, Servicios, Gimnasio...). Estos se descontarán automáticamente de tu presupuesto.</p>
+                          <p className="text-sm text-gray-400">Agrega tus gastos fijos (Arriendo, Servicios, Gimnasio...). Estos se descontarán automáticamente.</p>
                           
                           <div className="bg-gray-800/50 p-4 rounded-lg space-y-3 border border-gray-700">
                                <div className="flex space-x-2">
@@ -379,6 +421,54 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
 
                            <div className="flex justify-between items-center pt-4">
                               <button onClick={() => setStep('income')} className="text-sm text-gray-400 hover:text-white">Atrás</button>
+                              <button onClick={handleExpensesSubmit} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Siguiente</button>
+                          </div>
+                      </div>
+                  )}
+                  
+                  {/* STEP 6: GOALS */}
+                  {step === 'goals' && (
+                      <div className="space-y-6">
+                          <p className="text-sm text-gray-400">¿Tienes metas de ahorro? (Ej: Comprar Carro, Vacaciones, Fondo de Emergencia).</p>
+                          
+                          <div className="bg-gray-800/50 p-4 rounded-lg space-y-3 border border-gray-700">
+                               <div className="flex space-x-2">
+                                   <input 
+                                        type="text" 
+                                        placeholder="Meta (Ej: Carro)" 
+                                        value={newGoalName}
+                                        onChange={e => setNewGoalName(e.target.value)}
+                                        className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                                   />
+                                   <input 
+                                        type="text" 
+                                        placeholder="Monto Objetivo" 
+                                        value={newGoalAmount}
+                                        onChange={e => {
+                                            const val = e.target.value.replace(/\D/g, '');
+                                            setNewGoalAmount(val ? formatCurrencyInput(parseInt(val), currency) : '');
+                                        }}
+                                        className="w-32 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm text-right"
+                                   />
+                                   <button onClick={handleAddGoal} disabled={!newGoalName || !newGoalAmount} className="bg-blue-600 text-white px-3 rounded hover:bg-blue-700 disabled:opacity-50">+</button>
+                               </div>
+                          </div>
+
+                          <div className="max-h-48 overflow-y-auto space-y-2">
+                              {goals.length === 0 && <p className="text-center text-xs text-gray-600 italic py-2">No has agregado metas aún.</p>}
+                              {goals.map(goal => (
+                                  <div key={goal.id} className="flex justify-between items-center bg-gray-800 p-3 rounded border border-gray-700">
+                                      <span className="text-gray-200">{goal.name}</span>
+                                      <div className="flex items-center space-x-3">
+                                          <span className="font-mono text-blue-400">{formatCurrencyInput(goal.targetAmount, currency)}</span>
+                                          <button onClick={() => handleRemoveGoal(goal.id)} className="text-gray-500 hover:text-red-400"><TrashIcon className="w-4 h-4" /></button>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+
+                           <div className="flex justify-between items-center pt-4">
+                              <button onClick={() => setStep('fixed_expenses')} className="text-sm text-gray-400 hover:text-white">Atrás</button>
                               <button onClick={handleFinish} className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center shadow-lg shadow-green-900/20">
                                   Terminar Configuración
                               </button>
@@ -399,7 +489,23 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
 
   // Welcome Screen
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4 relative">
+      
+      {/* Sign Out Button */}
+      <div className="absolute top-4 right-4">
+          <button 
+              onClick={onSignOut}
+              className="flex items-center gap-2 text-red-400 hover:text-red-300 text-sm font-semibold bg-gray-800/50 px-3 py-2 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
+          >
+              <span>Cerrar Sesión</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+          </button>
+      </div>
+
       <div className="max-w-4xl w-full">
         <div className="text-center mb-12">
             <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-lg shadow-blue-900/20">

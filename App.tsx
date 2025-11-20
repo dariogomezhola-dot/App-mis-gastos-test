@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Navigation from './components/Navigation';
 import Gastos from './modules/Gastos';
-import Proyectos from './modules/Proyectos';
-import Viaje from './modules/Viaje';
+import Metas from './modules/Metas';
 import Deudas from './modules/Deudas';
 import ResumenGeneral from './modules/ResumenGeneral';
 import Configuracion from './modules/Configuracion';
@@ -141,10 +140,8 @@ const App: React.FC = () => {
                 return <ResumenGeneral entityId={activeEntity.id} />;
             case 'gastos':
                 return <Gastos entityId={activeEntity.id} />;
-            case 'proyectos':
-                return <Proyectos entityId={activeEntity.id} />;
-            case 'viaje':
-                return <Viaje entityId={activeEntity.id} />;
+            case 'metas':
+                return <Metas entityId={activeEntity.id} />;
             case 'deudas':
                 return <Deudas entityId={activeEntity.id} />;
             case 'configuracion':
@@ -182,6 +179,7 @@ const App: React.FC = () => {
             entities={entities}
             onSelectEntity={handleSelectEntity}
             onCreateEntity={handleCreateEntity}
+            onSignOut={handleSignOut}
             loading={entitiesLoading}
         />;
     }
