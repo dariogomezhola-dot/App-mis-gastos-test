@@ -1,3 +1,4 @@
+
 export type Module = 'resumen' | 'gastos' | 'proyectos' | 'viaje' | 'deudas' | 'configuracion';
 
 // Config - The single source of truth
@@ -18,7 +19,7 @@ export interface BudgetVariableEgreso {
     id: string;
     name: string;
     totalAmount: number;
-    category: EgresoCategory;
+    category: string;
 }
 
 export interface ProjectExpense {
@@ -44,6 +45,7 @@ export interface Debt {
 }
 
 export interface ConfigData {
+    categories: string[];
     savingsGoals: SavingsGoal[];
     budgetVariables: {
         ingresos: BudgetVariableIngreso[];
@@ -62,15 +64,8 @@ export interface Ingreso {
     projectId?: string; // Link to a specific project
 }
 
-export type EgresoCategory =
-  | 'servicios'
-  | 'mercado'
-  | 'transporte'
-  | 'comida_calle'
-  | 'domicilios'
-  | 'regalos'
-  | 'deudas'
-  | 'otro';
+// Changed from union type to string to allow custom categories
+export type EgresoCategory = string;
 
 export interface Egreso {
     id: string;

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { Module } from '../types';
 import { HomeIcon, DollarSignIcon, BriefcaseIcon, PlaneIcon, CreditCardIcon, MenuIcon, XIcon, SettingsIcon } from './Icons';
@@ -54,7 +53,12 @@ const Navigation: React.FC<NavigationProps> = ({ activeEntityName, onSwitchEntit
     const sidebarContent = (
         <div className="flex flex-col h-full">
             <div className="flex items-center justify-between h-16 px-4 border-b border-gray-700">
-                <h1 className="text-xl font-bold text-white">Finanzas</h1>
+                <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <span className="text-white font-bold text-lg">G</span>
+                    </div>
+                    <h1 className="text-xl font-bold text-white">Gastón</h1>
+                </div>
                  <button onClick={() => setSidebarOpen(false)} className="md:hidden p-2 text-gray-400 hover:text-white">
                     <XIcon className="w-6 h-6" />
                 </button>
@@ -86,7 +90,12 @@ const Navigation: React.FC<NavigationProps> = ({ activeEntityName, onSwitchEntit
         <>
             {/* Mobile Header */}
             <header className="md:hidden fixed top-0 left-0 right-0 z-20 flex items-center justify-between h-16 px-4 bg-gray-800 border-b border-gray-700">
-                <h1 className="text-xl font-bold text-white">Finanzas</h1>
+                <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <span className="text-white font-bold text-lg">G</span>
+                    </div>
+                    <h1 className="text-xl font-bold text-white">Gastón</h1>
+                </div>
                 <button onClick={() => setSidebarOpen(true)} className="p-2 text-gray-400 hover:text-white">
                     <MenuIcon className="w-6 h-6" />
                 </button>

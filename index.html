@@ -1,10 +1,16 @@
+
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="es">
+  <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Personal Finance Dashboard</title>
+    <title>Gastón - Finanzas Personales</title>
+    
+    <!-- 1. Carga de Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 2. Configuración de Tema (Tus colores personalizados) -->
     <script>
       tailwind.config = {
         theme: {
@@ -16,33 +22,42 @@
               'gray-600': '#3C3C3C',
               'gray-500': '#8A8A8A',
               'gray-400': '#B3B3B3',
-              'blue-500': '#3b82f6',
+              'blue-500': '#3B82F6',
               'blue-600': '#2563eb',
             }
           }
         }
       }
     </script>
-<script type="importmap">
+    
+    <!-- 3. IMPORT MAP CORREGIDO (Sin conflictos) -->
+    <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js",
+    "uuid": "https://esm.sh/uuid@9.0.1",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
-    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
-    "@firebase/auth": "https://aistudiocdn.com/@firebase/auth@^1.11.1"
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
   }
 }
 </script>
-</head>
-<body class="bg-gray-900 text-gray-400">
+  </head>
+  <body class="bg-gray-900 text-gray-400">
     <div id="root"></div>
     
-    <!-- Utils -->
+    <!-- Iconos -->
     <script src="https://unpkg.com/feather-icons"></script>
+    
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <!-- Punto de entrada principal -->
     <script type="module" src="/index.tsx"></script>
-</body>
+  </body>
 </html>

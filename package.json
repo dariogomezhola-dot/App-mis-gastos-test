@@ -10,10 +10,9 @@
   },
   "dependencies": {
     "react": "^19.2.0",
+    "uuid": "9.0.1",
     "react-dom": "^19.2.0",
-    "firebase": "^12.6.0",
-    "uuid": "^13.0.0",
-    "@firebase/auth": "^1.11.1"
+    "firebase": "^12.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

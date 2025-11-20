@@ -8,7 +8,7 @@ import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { Spinner } from '../components/common/Spinner';
 import { MonthSelector } from '../components/MonthSelector';
-import { EditIcon, CheckIcon, XIcon, TrashIcon, CopyIcon } from '../components/Icons';
+import { EditIcon, CheckIcon, XIcon, TrashIcon, CopyIcon, DownloadIcon, RepeatIcon } from '../components/Icons';
 import { v4 as uuidv4 } from 'uuid';
 import { writeBatch, doc } from 'firebase/firestore';
 import { db, appId } from '../services/firebaseService';
@@ -21,31 +21,20 @@ const getYearMonth = (date: Date): string => {
     return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
 }
 
-const egresoCategories: EgresoCategory[] = ['servicios', 'mercado', 'transporte', 'comida_calle', 'domicilios', 'regalos', 'deudas', 'otro'];
-const categoryLabels: Record<EgresoCategory, string> = {
-    servicios: 'Servicios',
-    mercado: 'Mercado',
-    transporte: 'Transporte',
-    comida_calle: 'Comida Calle',
-    domicilios: 'Domicilios',
-    regalos: 'Regalos',
-    deudas: 'Deudas',
-    otro: 'Otro'
-};
-
 interface EditableItemProps {
     item: Ingreso | Egreso;
     isEditing: boolean;
     onToggleEdit: (item: Ingreso | Egreso | null) => void;
     onSave: (item: Ingreso | Egreso) => void;
     onDelete: (id: string) => void;
+    onMakeRecurring: (item: Ingreso | Egreso) => void;
     extraContent?: React.ReactNode;
     configData: ConfigData;
 }
 
-function EditableListItem({ item, isEditing, onToggleEdit, onSave, onDelete, extraContent, configData }: EditableItemProps) {
+const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onToggleEdit, onSave, onDelete, onMakeRecurring, extraContent, configData }) => {
     const [editForm, setEditForm] = useState(item);
-    const { debts, projects } = configData;
+    const { debts, projects, categories } = configData;
 
     const handleSave = () => {
         const monto = Number(editForm.monto);
@@ -65,7 +54,7 @@ function EditableListItem({ item, isEditing, onToggleEdit, onSave, onDelete, ext
     };
 
     const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newCategory = e.target.value as EgresoCategory;
+        const newCategory = e.target.value;
         
         setEditForm(prevForm => {
             const newFormState = { ...prevForm, category: newCategory };
@@ -96,7 +85,8 @@ function EditableListItem({ item, isEditing, onToggleEdit, onSave, onDelete, ext
                             onChange={handleCategoryChange}
                             className="bg-gray-600 text-white rounded px-2 py-1"
                         >
-                            {egresoCategories.map(cat => <option key={cat} value={cat}>{categoryLabels[cat]}</option>)}
+                            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            <option value="deudas">Deudas</option>
                         </select>
                     )}
                     {isEgreso && egresoForm.category === 'deudas' && (
@@ -138,7 +128,7 @@ function EditableListItem({ item, isEditing, onToggleEdit, onSave, onDelete, ext
             <div className="flex flex-col">
                 <span>{item.desc}</span>
                 <div className="flex items-center space-x-2">
-                     { 'category' in item && <span className="text-xs text-gray-500">{categoryLabels[item.category as EgresoCategory]}</span> }
+                     { 'category' in item && <span className="text-xs text-gray-500 capitalize">{item.category}</span> }
                      {debtName && <span className="text-xs text-blue-400 bg-blue-500/10 px-1 rounded-sm">{debtName}</span>}
                      {projectName && <span className="text-xs text-green-400 bg-green-500/10 px-1 rounded-sm">{projectName}</span>}
                 </div>
@@ -146,6 +136,7 @@ function EditableListItem({ item, isEditing, onToggleEdit, onSave, onDelete, ext
             <div className="flex items-center space-x-4">
                <span className="font-semibold">{formatCurrency(item.monto)}</span>
                {extraContent}
+               <button title="Hacer Recurrente" onClick={() => onMakeRecurring(item)} className="p-1 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity hover:text-blue-400"><RepeatIcon className="w-4 h-4" /></button>
                <button onClick={() => onToggleEdit(item)} className="p-1 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity hover:text-white"><EditIcon className="w-4 h-4" /></button>
                <button onClick={() => onDelete(item.id)} className="p-1 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400"><TrashIcon className="w-4 h-4" /></button>
             </div>
@@ -164,9 +155,11 @@ const AddTransactionForm: React.FC<{
 }> = ({ type, onClose, data, updateData, configData, updateConfigData, quincenaKey }) => {
     const [desc, setDesc] = useState('');
     const [monto, setMonto] = useState(0);
-    const [category, setCategory] = useState<EgresoCategory>('otro');
+    const [category, setCategory] = useState<string>('otro');
     const [debtId, setDebtId] = useState<string>('');
     const [projectId, setProjectId] = useState<string>('');
+
+    const { categories } = configData;
 
     const handleManualSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -176,7 +169,7 @@ const AddTransactionForm: React.FC<{
         
         if (type === 'ingreso') {
             const newItem: Ingreso = { id: uuidv4(), desc, monto };
-            if (projectId) { // If it's a project abono
+            if (projectId) {
                 newItem.projectId = projectId;
                 const updatedConfig = JSON.parse(JSON.stringify(configData));
                 const project = updatedConfig.projects.find((p: Project) => p.id === projectId);
@@ -186,7 +179,7 @@ const AddTransactionForm: React.FC<{
                 }
             }
             updatedData[quincenaKey].ingresos.push(newItem);
-        } else { // type is 'egreso'
+        } else {
             const newEgreso: Egreso = {
                 id: uuidv4(), desc, monto, pagado: false, category,
             };
@@ -206,7 +199,7 @@ const AddTransactionForm: React.FC<{
         const updatedData = JSON.parse(JSON.stringify(data));
         const amount = split ? variable.totalAmount / 2 : variable.totalAmount;
         
-        if ('category' in variable) { // Egreso
+        if ('category' in variable) {
              const newEgreso: Egreso = { id: uuidv4(), desc: variable.name, monto: amount, category: variable.category, pagado: false };
              if (split) {
                  updatedData.q1.egresos.push(newEgreso);
@@ -214,7 +207,7 @@ const AddTransactionForm: React.FC<{
              } else {
                  updatedData[quincenaKey].egresos.push(newEgreso);
              }
-        } else { // Ingreso
+        } else {
             const newIngreso: Ingreso = { id: uuidv4(), desc: variable.name, monto: amount };
             if (split) {
                  updatedData.q1.ingresos.push(newIngreso);
@@ -229,15 +222,15 @@ const AddTransactionForm: React.FC<{
     };
     
     return (
-        <Card className="my-4">
+        <Card className="my-4 border border-gray-600">
              <>
                 <h4 className="font-bold text-white mb-2">Añadir desde Presupuesto</h4>
                 <div className="flex flex-wrap gap-2 mb-4">
                     {(type === 'ingreso' ? configData.budgetVariables.ingresos : configData.budgetVariables.egresos).map(variable => (
                         <div key={variable.id} className="bg-gray-700 p-2 rounded flex items-center gap-2">
-                            <span>{variable.name} ({formatCurrency(variable.totalAmount)})</span>
-                            <button onClick={() => handleBudgetAdd(variable, false)} className="text-xs bg-blue-600 px-2 py-1 rounded hover:bg-blue-500">Completo</button>
-                            <button onClick={() => handleBudgetAdd(variable, true)} className="text-xs bg-green-600 px-2 py-1 rounded hover:bg-green-500">Dividir</button>
+                            <span className="text-sm">{variable.name} ({formatCurrency(variable.totalAmount)})</span>
+                            <button onClick={() => handleBudgetAdd(variable, false)} className="text-xs bg-blue-600 px-2 py-1 rounded hover:bg-blue-500">100%</button>
+                            <button onClick={() => handleBudgetAdd(variable, true)} className="text-xs bg-green-600 px-2 py-1 rounded hover:bg-green-500">50%</button>
                         </div>
                     ))}
                 </div>
@@ -246,21 +239,22 @@ const AddTransactionForm: React.FC<{
 
             <form onSubmit={handleManualSubmit} className="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
                 <h4 className="font-bold text-white mb-2 sm:mb-0 w-full sm:w-auto">Nuevo {type} (Manual):</h4>
-                <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción" className="bg-gray-700 p-2 rounded flex-grow"/>
-                <input type="number" value={monto} onChange={e => setMonto(Number(e.target.value))} placeholder="Monto" className="bg-gray-700 p-2 rounded w-full sm:w-32"/>
+                <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descripción" className="bg-gray-700 p-2 rounded flex-grow text-white"/>
+                <input type="number" value={monto} onChange={e => setMonto(Number(e.target.value))} placeholder="Monto" className="bg-gray-700 p-2 rounded w-full sm:w-32 text-white"/>
                 {type === 'ingreso' && (
-                    <select value={projectId} onChange={e => setProjectId(e.target.value)} className="bg-gray-700 p-2 rounded">
+                    <select value={projectId} onChange={e => setProjectId(e.target.value)} className="bg-gray-700 p-2 rounded text-white">
                         <option value="">Ingreso General</option>
                         {configData.projects.map(proj => <option key={proj.id} value={proj.id}>Abono: {proj.name}</option>)}
                     </select>
                 )}
                 {type === 'egreso' && (
                     <>
-                     <select value={category} onChange={e => setCategory(e.target.value as EgresoCategory)} className="bg-gray-700 p-2 rounded">
-                        {egresoCategories.map(cat => <option key={cat} value={cat}>{categoryLabels[cat]}</option>)}
+                     <select value={category} onChange={e => setCategory(e.target.value)} className="bg-gray-700 p-2 rounded text-white">
+                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        <option value="deudas">Deuda</option>
                     </select>
                     {category === 'deudas' && (
-                         <select value={debtId} onChange={e => setDebtId(e.target.value)} className="bg-gray-700 p-2 rounded">
+                         <select value={debtId} onChange={e => setDebtId(e.target.value)} className="bg-gray-700 p-2 rounded text-white">
                             <option value="">Seleccionar Deuda</option>
                             {configData.debts.map(debt => <option key={debt.id} value={debt.id}>{debt.name}</option>)}
                         </select>
@@ -269,7 +263,7 @@ const AddTransactionForm: React.FC<{
                 )}
                 <div className="flex space-x-2 self-end sm:self-center">
                     <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Agregar</button>
-                    <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded">Cerrar</button>
+                    <button type="button" onClick={onClose} className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded">Cancelar</button>
                 </div>
             </form>
         </Card>
@@ -336,6 +330,29 @@ const QuincenaView: React.FC<{
             updateData(updatedData);
         }
     };
+
+    const handleMakeRecurring = (item: Ingreso | Egreso) => {
+        if(!window.confirm(`¿Agregar "${item.desc}" a tu presupuesto recurrente en Configuración?`)) return;
+
+        const updatedConfig = JSON.parse(JSON.stringify(configData));
+        const totalAmount = item.monto * 2; // Assuming if added to one quincena, monthly total is double, or just reuse amount. Let's use amount * 1 for safety or ask user. Assuming monthly context usually implies item * 1 if unique or item * 2 if split. Let's default to amount * 1 for safety.
+        
+        if ('category' in item) {
+            updatedConfig.budgetVariables.egresos.push({
+                id: uuidv4(),
+                name: item.desc,
+                totalAmount: item.monto, 
+                category: item.category
+            });
+        } else {
+            updatedConfig.budgetVariables.ingresos.push({
+                id: uuidv4(),
+                name: item.desc,
+                totalAmount: item.monto
+            });
+        }
+        updateConfigData(updatedConfig);
+    };
     
     return (
         <div>
@@ -357,9 +374,12 @@ const QuincenaView: React.FC<{
                 <Card>
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-bold text-green-400">Ingresos</h3>
-                        <button onClick={() => setShowAddForm('ingreso')} className="bg-green-500/20 text-green-400 px-2 py-1 text-xs rounded hover:bg-green-500/40">+</button>
+                        <button onClick={() => setShowAddForm('ingreso')} className="bg-green-500/20 text-green-400 px-2 py-1 text-xs rounded hover:bg-green-500/40">+ AÑADIR</button>
                     </div>
                     {showAddForm === 'ingreso' && <AddTransactionForm type="ingreso" onClose={() => setShowAddForm(null)} data={data} updateData={updateData} configData={configData} updateConfigData={updateConfigData} quincenaKey={quincenaKey} />}
+                    {quincena.ingresos.length === 0 && !showAddForm && (
+                         <div className="text-center py-4 text-gray-600 text-sm italic">No hay ingresos registrados.</div>
+                    )}
                     <ul>
                         {quincena.ingresos.map((item) => (
                             <EditableListItem
@@ -369,6 +389,7 @@ const QuincenaView: React.FC<{
                                 onToggleEdit={(i) => setEditingItemId(i?.id ?? null)}
                                 onSave={(editedItem) => handleSave(editedItem, 'ingresos')}
                                 onDelete={(id) => handleDelete(id, 'ingresos')}
+                                onMakeRecurring={handleMakeRecurring}
                                 configData={configData}
                             />
                         ))}
@@ -377,9 +398,12 @@ const QuincenaView: React.FC<{
                 <Card>
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-bold text-red-400">Egresos</h3>
-                         <button onClick={() => setShowAddForm('egreso')} className="bg-red-500/20 text-red-400 px-2 py-1 text-xs rounded hover:bg-red-500/40">+</button>
+                         <button onClick={() => setShowAddForm('egreso')} className="bg-red-500/20 text-red-400 px-2 py-1 text-xs rounded hover:bg-red-500/40">+ AÑADIR</button>
                     </div>
                     {showAddForm === 'egreso' && <AddTransactionForm type="egreso" onClose={() => setShowAddForm(null)} data={data} updateData={updateData} configData={configData} updateConfigData={updateConfigData} quincenaKey={quincenaKey} />}
+                    {quincena.egresos.length === 0 && !showAddForm && (
+                         <div className="text-center py-4 text-gray-600 text-sm italic">No hay gastos registrados.</div>
+                    )}
                     <ul>
                         {quincena.egresos.map((item) => (
                              <EditableListItem
@@ -389,6 +413,7 @@ const QuincenaView: React.FC<{
                                 onToggleEdit={(i) => setEditingItemId(i?.id ?? null)}
                                 onSave={(editedItem) => handleSave(editedItem as Egreso, 'egresos')}
                                 onDelete={(id) => handleDelete(id, 'egresos')}
+                                onMakeRecurring={handleMakeRecurring}
                                  extraContent={
                                     <div onClick={() => togglePagado(item)} className="cursor-pointer">
                                         <Badge text={item.pagado ? 'PAGADO' : 'NO PAGO'} color={item.pagado ? 'green' : 'red'} />
@@ -441,11 +466,11 @@ const Resumen: React.FC<{
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="flex items-center space-x-2">
                      <label className="font-semibold text-gray-400">Ahorros Q1:</label>
-                    <input type="number" value={data.q1?.ahorros ?? 0} onBlur={(e) => handleAhorrosChange('q1', Number(e.target.value))} onChange={(e) => handleAhorrosChange('q1', Number(e.target.value))} placeholder="Ahorros Q1" className="bg-gray-700 p-2 rounded w-full"/>
+                    <input type="number" value={data.q1?.ahorros ?? 0} onBlur={(e) => handleAhorrosChange('q1', Number(e.target.value))} onChange={(e) => handleAhorrosChange('q1', Number(e.target.value))} placeholder="Ahorros Q1" className="bg-gray-700 p-2 rounded w-full text-white"/>
                 </div>
                 <div className="flex items-center space-x-2">
                     <label className="font-semibold text-gray-400">Ahorros Q2:</label>
-                    <input type="number" value={data.q2?.ahorros ?? 0} onBlur={(e) => handleAhorrosChange('q2', Number(e.target.value))} onChange={(e) => handleAhorrosChange('q2', Number(e.target.value))} placeholder="Ahorros Q2" className="bg-gray-700 p-2 rounded w-full"/>
+                    <input type="number" value={data.q2?.ahorros ?? 0} onBlur={(e) => handleAhorrosChange('q2', Number(e.target.value))} onChange={(e) => handleAhorrosChange('q2', Number(e.target.value))} placeholder="Ahorros Q2" className="bg-gray-700 p-2 rounded w-full text-white"/>
                 </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
@@ -534,7 +559,6 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
         saveTimeoutRef.current = window.setTimeout(() => setSaveStatus('idle'), 2000);
     };
 
-
     const handleCopyQuincena = () => {
         if (!data || !window.confirm("¿Copiar todos los items de Q1 a Q2? Esto sobreescribirá los datos de Q2.")) return;
         
@@ -608,6 +632,42 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
 
         handleUpdateData(newGastosData, { merge: false });
     }
+
+    const handleExportCSV = () => {
+        if (!data) return;
+
+        const rows = [
+            ['Fecha', 'Quincena', 'Tipo', 'Descripción', 'Categoría', 'Monto', 'Estado'],
+        ];
+
+        const processItems = (items: any[], type: 'Ingreso' | 'Egreso', q: string) => {
+            items.forEach(item => {
+                rows.push([
+                    yearMonth,
+                    q,
+                    type,
+                    `"${item.desc}"`,
+                    item.category || 'General',
+                    item.monto.toString(),
+                    item.pagado !== undefined ? (item.pagado ? 'Pagado' : 'Pendiente') : '-'
+                ]);
+            });
+        };
+
+        processItems(data.q1.ingresos, 'Ingreso', 'Q1');
+        processItems(data.q1.egresos, 'Egreso', 'Q1');
+        processItems(data.q2.ingresos, 'Ingreso', 'Q2');
+        processItems(data.q2.egresos, 'Egreso', 'Q2');
+
+        const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `gastos_${yearMonth}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
     
     useEffect(() => {
        return () => {
@@ -651,12 +711,13 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
         <div className="space-y-6">
             <SaveStatusIndicator />
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                <h1 className="text-3xl font-bold text-white">Gastos Personales</h1>
+                <h1 className="text-3xl font-bold text-white">Gastos</h1>
                 <MonthSelector currentDate={currentDate} setCurrentDate={setCurrentDate} />
             </div>
-             <div className="flex flex-wrap gap-2">
+             <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
                 <button onClick={handleApplyBudget} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-sm rounded-md">Aplicar Presupuesto</button>
                 <button onClick={() => setCopyModalOpen(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-sm rounded-md"><CopyIcon className="w-4 h-4" /> Copiar Mes</button>
+                <button onClick={handleExportCSV} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 text-sm rounded-md"><DownloadIcon className="w-4 h-4" /> Exportar CSV</button>
                 <button onClick={handleClearMonth} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 py-2 text-sm rounded-md"><TrashIcon className="w-4 h-4" /> Limpiar Mes</button>
              </div>
             

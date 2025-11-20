@@ -10,9 +10,9 @@ import Configuracion from './modules/Configuracion';
 import { Spinner } from './components/common/Spinner';
 import { db } from './services/firebaseService';
 import { collection, getDocs, addDoc, setDoc } from 'firebase/firestore';
-import type { Module } from './types';
+import type { Module, ConfigData } from './types';
 import { EntitySelector } from './components/EntitySelector';
-import { initialConfigData, blankGastosData } from './data/initialData';
+import { blankGastosData } from './data/initialData';
 import { getDataDocRef } from './services/firebaseService';
 
 interface Entity {
@@ -68,13 +68,13 @@ const App: React.FC = () => {
         }
     };
 
-    const handleCreateEntity = async (name: string) => {
+    const handleCreateEntity = async (name: string, template: ConfigData) => {
         try {
             const docRef = await addDoc(collection(db, 'entities'), { name });
             const newEntity = { id: docRef.id, name };
             
             const configDocRef = getDataDocRef(newEntity.id, 'configuracion');
-            await setDoc(configDocRef, initialConfigData);
+            await setDoc(configDocRef, template);
             
             const currentDate = new Date();
             const yearMonth = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
