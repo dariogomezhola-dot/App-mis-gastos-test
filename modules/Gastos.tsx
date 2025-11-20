@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useFirestoreDoc } from '../hooks/useFirestoreDoc';
 import { blankGastosData, initialConfigData } from '../data/initialData';
@@ -8,7 +7,7 @@ import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { Spinner } from '../components/common/Spinner';
 import { MonthSelector } from '../components/MonthSelector';
-import { EditIcon, CheckIcon, XIcon, TrashIcon, CopyIcon, DownloadIcon, RepeatIcon, ZapIcon } from '../components/Icons';
+import { EditIcon, CheckIcon, XIcon, TrashIcon, CopyIcon, DownloadIcon, RepeatIcon } from '../components/Icons';
 import { v4 as uuidv4 } from 'uuid';
 import { writeBatch, doc } from 'firebase/firestore';
 import { db, appId, getDataDocRef } from '../services/firebaseService';
@@ -161,7 +160,7 @@ const AddTransactionForm: React.FC<{
     configData: ConfigData;
     updateConfigData: (newData: Partial<ConfigData>) => Promise<void>;
     quincenaKey: 'q1' | 'q2';
-    defaultDate?: string; // To support Quick Add
+    defaultDate?: string;
     defaultDesc?: string;
     defaultMonto?: number;
 }> = ({ type, onClose, data, updateData, configData, updateConfigData, quincenaKey, defaultDate, defaultDesc, defaultMonto }) => {
@@ -177,10 +176,6 @@ const AddTransactionForm: React.FC<{
     const handleManualSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!desc || monto <= 0) return;
-
-        // If date provided, determine correct Quincena and Month document
-        // Note: This generic form operates on the "current view" data props. 
-        // Quick Add logic handles cross-month updates separately. This form assumes we are in context.
         
         const updatedData = JSON.parse(JSON.stringify(data));
         
@@ -195,7 +190,6 @@ const AddTransactionForm: React.FC<{
             if (category === 'deudas' && debtId) newEgreso.debtId = debtId;
             if (category === 'abono_meta' && goalId) {
                  newEgreso.goalId = goalId;
-                 // Update Goal Balance
                  const updatedConfig = JSON.parse(JSON.stringify(configData));
                  const goal = updatedConfig.financialGoals?.find((g: FinancialGoal) => g.id === goalId);
                  if (goal) {
@@ -220,7 +214,7 @@ const AddTransactionForm: React.FC<{
     const handleBudgetAdd = (variable: BudgetVariableIngreso | BudgetVariableEgreso, split: boolean) => {
         const updatedData = JSON.parse(JSON.stringify(data));
         const amount = split ? variable.totalAmount / 2 : variable.totalAmount;
-        const itemDate = date; // Use current selected date
+        const itemDate = date;
         
         if ('category' in variable) {
              const newEgreso: Egreso = { id: uuidv4(), desc: variable.name, monto: amount, category: variable.category, pagado: false, date: itemDate };
@@ -533,106 +527,6 @@ const Resumen: React.FC<{
     )
 }
 
-const QuickAddModal: React.FC<{
-    onClose: () => void;
-    entityId: string;
-    configData: ConfigData;
-    updateConfigData: (d: Partial<ConfigData>) => Promise<void>;
-}> = ({ onClose, entityId, configData, updateConfigData }) => {
-    const [desc, setDesc] = useState('');
-    const [monto, setMonto] = useState(0);
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [category, setCategory] = useState<string>('otro');
-    const [saving, setSaving] = useState(false);
-
-    // Reusing logic similar to AddTransaction but simplified for "Quick Add"
-    const handleQuickSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!desc || monto <= 0) return;
-        setSaving(true);
-
-        try {
-            const inputDate = new Date(date);
-            // 1. Determine Month Document
-            const yearMonth = getYearMonth(inputDate);
-            
-            // 2. Determine Quincena
-            const day = inputDate.getDate();
-            const isMonthly = configData.paymentFrequency === 'monthly';
-            const quincenaKey = isMonthly ? 'q1' : (day <= 15 ? 'q1' : 'q2');
-
-            // 3. Fetch existing doc for that month (might be different from current view)
-            const docRef = getDataDocRef(entityId, 'gastos', yearMonth);
-            const { getDoc, setDoc } = await import('firebase/firestore');
-            const docSnap = await getDoc(docRef);
-            
-            let monthData = blankGastosData;
-            if (docSnap.exists()) {
-                monthData = docSnap.data() as GastosData;
-            }
-
-            // 4. Add Item
-            const newEgreso: Egreso = {
-                id: uuidv4(),
-                desc: `⚡ ${desc}`, // Mark as quick add
-                monto,
-                pagado: false,
-                category,
-                date
-            };
-            monthData[quincenaKey].egresos.push(newEgreso);
-
-            // 5. Save
-            await setDoc(docRef, monthData);
-            onClose();
-        } catch (error) {
-            console.error("Quick add failed", error);
-            alert("Error al guardar el gasto rápido.");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/80 flex items-end sm:items-center justify-center z-50 p-4">
-            <div className="bg-gray-800 w-full max-w-md rounded-xl border border-yellow-500/30 shadow-2xl shadow-yellow-900/20 p-6 animate-slideUp sm:animate-fadeIn">
-                <div className="flex items-center gap-2 mb-4 text-yellow-400">
-                    <ZapIcon className="w-6 h-6" />
-                    <h3 className="text-xl font-bold text-white">Gasto Rápido</h3>
-                </div>
-                
-                <form onSubmit={handleQuickSubmit} className="space-y-4">
-                    <div>
-                        <label className="text-xs text-gray-500 uppercase font-bold">Fecha</label>
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-lg mt-1" />
-                    </div>
-                    <div>
-                        <label className="text-xs text-gray-500 uppercase font-bold">Descripción</label>
-                        <input autoFocus type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ej: Taxi, Café, Antojo..." className="w-full bg-gray-700 text-white p-3 rounded-lg mt-1" />
-                    </div>
-                    <div>
-                         <label className="text-xs text-gray-500 uppercase font-bold">Monto</label>
-                         <CurrencyInput value={monto} onChange={setMonto} placeholder="0" className="w-full bg-gray-700 text-white p-3 rounded-lg mt-1 font-mono text-lg" />
-                    </div>
-                    <div>
-                         <label className="text-xs text-gray-500 uppercase font-bold">Categoría</label>
-                         <select value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-lg mt-1">
-                            {configData.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                        </select>
-                    </div>
-                    
-                    <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="flex-1 bg-gray-700 text-white py-3 rounded-lg font-bold hover:bg-gray-600">Cancelar</button>
-                        <button type="submit" disabled={saving} className="flex-1 bg-yellow-600 text-white py-3 rounded-lg font-bold hover:bg-yellow-500 shadow-lg shadow-yellow-600/20">
-                            {saving ? <Spinner /> : 'Registrar Gasto'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
 const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const yearMonth = useMemo(() => getYearMonth(currentDate), [currentDate]);
@@ -642,7 +536,6 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
 
     const [activeTab, setActiveTab] = useState<'q1' | 'q2'>('q1');
     const [isCopyModalOpen, setCopyModalOpen] = useState(false);
-    const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     
     const saveTimeoutRef = useRef<number | null>(null);
@@ -726,16 +619,14 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
         
         const isMonthly = configData.paymentFrequency === 'monthly';
         
-        // Helper to guess date for budget items
         const getTentativeDate = (day?: number, quincena: 'q1' | 'q2' = 'q1') => {
             const y = currentDate.getFullYear();
             const m = currentDate.getMonth();
             let d = day || 1;
-            if (quincena === 'q2' && d < 16) d = 16; // fallback
+            if (quincena === 'q2' && d < 16) d = 16; 
             return new Date(y, m, d).toISOString().split('T')[0];
         }
 
-        // If monthly, put everything in Q1. If biweekly, split by 2.
         budget.ingresos.forEach(ing => {
             const amount = isMonthly ? ing.totalAmount : ing.totalAmount / 2;
             newGastosData.q1.ingresos.push({ id: uuidv4(), desc: ing.name, monto: amount, date: getTentativeDate(1) });
@@ -748,13 +639,9 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
             const amount = isMonthly ? egr.totalAmount : egr.totalAmount / 2;
             const pDay = egr.paymentDay;
             
-            // Logic to place in Q1 or Q2 based on payment day
             if (isMonthly) {
                  newGastosData.q1.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false, date: getTentativeDate(pDay) });
             } else {
-                // Biweekly logic: Split amount? Or place in specific quincena based on date?
-                // Prompt requested simple logic previously, sticking to split for safety unless user configured dates rigidly.
-                // Let's just split for now to avoid confusion, but use the payment day if it falls in the range.
                 newGastosData.q1.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false, date: getTentativeDate(pDay && pDay <= 15 ? pDay : 1) });
                 newGastosData.q2.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false, date: getTentativeDate(pDay && pDay > 15 ? pDay : 16, 'q2') });
             }
@@ -810,17 +697,6 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
     const loading = gastosLoading || configLoading;
     const isMonthly = configData?.paymentFrequency === 'monthly';
 
-    // Floating Action Button for Quick Add
-    const FAB = () => (
-        <button 
-            onClick={() => setIsQuickAddOpen(true)}
-            className="fixed bottom-6 right-6 w-14 h-14 bg-yellow-500 hover:bg-yellow-400 text-gray-900 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-110 z-40"
-            title="Gasto Rápido (Hormiga)"
-        >
-            <ZapIcon className="w-8 h-8" />
-        </button>
-    );
-
     const TabButton: React.FC<{ tabKey: 'q1' | 'q2', label: string }> = ({ tabKey, label }) => (
         <button
             onClick={() => setActiveTab(tabKey)}
@@ -842,9 +718,6 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
         <div className="space-y-6 pb-16 relative">
             <SaveStatusIndicator />
             
-            {/* Floating Action Button */}
-            {configData && <FAB />}
-
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <h1 className="text-3xl font-bold text-white">Gastos</h1>
                 <MonthSelector currentDate={currentDate} setCurrentDate={setCurrentDate} />
@@ -865,10 +738,8 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
                              <Resumen data={data} updateData={handleUpdateData} />
                          </div>
                          <div className="lg:col-span-1 space-y-4">
-                             {/* Additional mini-stats or summary could go here if needed, currently empty space utilization */}
                              <Card className="h-full flex flex-col justify-center items-center border border-gray-700">
                                  <p className="text-sm text-gray-400 mb-2">Presupuesto Diario Sugerido (Restante)</p>
-                                 {/* Simple calc: (Income - Fixed) / Days left. Placeholder logic for now */}
                                  <p className="text-3xl font-bold text-blue-400">
                                      {formatCurrency((data.q1.ingresos.reduce((s,i)=>s+i.monto,0) + data.q2.ingresos.reduce((s,i)=>s+i.monto,0) - data.q1.egresos.reduce((s,e)=>s+e.monto,0) - data.q2.egresos.reduce((s,e)=>s+e.monto,0)) / 30)}
                                  </p>
@@ -910,15 +781,6 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
             )}
             
             {isCopyModalOpen && <CopyMonthModal onCopy={handleCopyMonth} onClose={() => setCopyModalOpen(false)} currentDate={currentDate} />}
-            
-            {isQuickAddOpen && configData && (
-                <QuickAddModal 
-                    onClose={() => setIsQuickAddOpen(false)} 
-                    entityId={entityId} 
-                    configData={configData}
-                    updateConfigData={handleUpdateConfigData}
-                />
-            )}
         </div>
     );
 };

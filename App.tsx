@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Navigation from './components/Navigation';
 import Gastos from './modules/Gastos';
@@ -15,6 +14,8 @@ import type { Module, ConfigData } from './types';
 import { EntitySelector } from './components/EntitySelector';
 import { blankGastosData } from './data/initialData';
 import { UserProfileModal } from './components/UserProfileModal';
+import { QuickAddModal } from './components/QuickAddModal';
+import { ZapIcon } from './components/Icons';
 
 interface Entity {
   id: string;
@@ -31,6 +32,7 @@ const App: React.FC = () => {
     const [activeModule, setActiveModule] = useState<Module>('resumen');
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     const [isProfileOpen, setProfileOpen] = useState(false);
+    const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
     
     // Auth Listener
     useEffect(() => {
@@ -198,10 +200,26 @@ const App: React.FC = () => {
                 setSidebarOpen={setSidebarOpen}
             />
             <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-                <div className="md:pl-64 pt-16 md:pt-0">
+                <div className="md:pl-64 pt-16 md:pt-0 pb-20">
                     {renderModule()}
                 </div>
             </main>
+
+            {/* Global Floating Action Button */}
+            <button 
+                onClick={() => setIsQuickAddOpen(true)}
+                className="fixed bottom-6 right-6 w-14 h-14 bg-yellow-500 hover:bg-yellow-400 text-gray-900 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-110 z-40 border-2 border-gray-900"
+                title="Gasto Rápido (Hormiga)"
+            >
+                <ZapIcon className="w-8 h-8" />
+            </button>
+
+            {isQuickAddOpen && (
+                <QuickAddModal 
+                    entityId={activeEntity.id} 
+                    onClose={() => setIsQuickAddOpen(false)} 
+                />
+            )}
 
             <UserProfileModal 
                 isOpen={isProfileOpen} 

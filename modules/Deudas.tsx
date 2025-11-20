@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useFirestoreDoc } from '../hooks/useFirestoreDoc';
 import { initialConfigData } from '../data/initialData';
@@ -7,28 +6,26 @@ import { formatCurrency } from '../utils/formatters';
 import { Card } from '../components/common/Card';
 import { Spinner } from '../components/common/Spinner';
 import { EditIcon, CheckIcon, XIcon, TrendingUpIcon, CalculatorIcon } from '../components/Icons';
+import { CurrencyInput } from '../components/common/CurrencyInput';
 
 interface ModuleProps {
     entityId: string;
-    setActiveModule?: (module: any) => void; // Optional hack to switch tabs if passed
+    setActiveModule?: (module: any) => void; 
 }
 
 const DebtSimulator: React.FC<{ debt: Debt }> = ({ debt }) => {
-    const [extraPayment, setExtraPayment] = useState<string>('');
+    const [extraPayment, setExtraPayment] = useState<number>(0);
     
     const interestRateMonthly = (debt.interestRate || 0) / 12 / 100;
     const remainingBalance = debt.totalAmount - debt.paidAmount;
     
-    // Simple amortization calc
     const calculateSavings = () => {
-        const extra = parseFloat(extraPayment) || 0;
+        const extra = extraPayment || 0;
         if (extra <= 0 || remainingBalance <= 0) return null;
 
-        // Current Scenario
         const currentMonthlyPayment = debt.installments > 0 ? debt.totalAmount / debt.installments : 0;
         if (currentMonthlyPayment === 0) return null;
 
-        // New time
         const newMonthlyPayment = currentMonthlyPayment + extra;
         
         const currentMonthsLeft = remainingBalance / currentMonthlyPayment;
@@ -50,11 +47,10 @@ const DebtSimulator: React.FC<{ debt: Debt }> = ({ debt }) => {
                 <h4 className="text-sm font-bold text-gray-300">Simular Abono Extra Mensual</h4>
             </div>
             <div className="flex gap-2 mb-2">
-                <input 
-                    type="number" 
-                    placeholder="Monto extra" 
+                <CurrencyInput 
                     value={extraPayment} 
-                    onChange={e => setExtraPayment(e.target.value)}
+                    onChange={setExtraPayment}
+                    placeholder="Monto extra" 
                     className="w-full bg-gray-800 text-white text-sm p-2 rounded border border-gray-600"
                 />
             </div>
@@ -74,7 +70,6 @@ const DebtCard: React.FC<{
     const progress = debt.totalAmount > 0 ? (debt.paidAmount / debt.totalAmount) * 100 : 0;
     const isInArrears = (debt.monthsInArrears || 0) > 0;
     
-    // Recommendation Logic
     const getRecommendation = () => {
         if (isInArrears) return { text: `¡URGENTE! Tienes ${debt.monthsInArrears} meses de mora. Contacta al banco.`, color: "text-red-400 bg-red-500/10 border-red-500/50" };
         if ((debt.interestRate || 0) > 20) return { text: "Prioridad Alta: Tasa de interés muy elevada. Considera abonos extra.", color: "text-yellow-400 bg-gray-800 border-gray-700" };
@@ -129,7 +124,6 @@ const DebtCard: React.FC<{
     );
 };
 
-// --- AMORTIZATION CALCULATOR COMPONENT ---
 const AmortizationCalculator: React.FC = () => {
     const [amount, setAmount] = useState<number>(10000000);
     const [rate, setRate] = useState<number>(12); // Annual
@@ -137,17 +131,24 @@ const AmortizationCalculator: React.FC = () => {
     const [extraPayment, setExtraPayment] = useState<number>(0);
 
     const schedule = useMemo(() => {
-        if (amount <= 0 || months <= 0) return [];
+        // Guard clauses to prevent crashes
+        if (!amount || amount <= 0 || !months || months <= 0 || months > 600) return [];
         
-        const monthlyRate = rate / 100 / 12;
-        // PMT Formula: P * (r * (1+r)^n) / ((1+r)^n - 1)
-        const pmt = amount * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
+        const monthlyRate = rate > 0 ? rate / 100 / 12 : 0;
+        let pmt = 0;
+
+        if (monthlyRate === 0) {
+             pmt = amount / months;
+        } else {
+             pmt = amount * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
+        }
         
         let balance = amount;
         const rows = [];
         let totalInterest = 0;
 
-        for (let i = 1; i <= months * 2; i++) { // Cap at double term to avoid infinite loops on weird inputs
+        // Strict loop limit
+        for (let i = 1; i <= months * 2; i++) {
             if (balance <= 0.1) break;
 
             const interest = balance * monthlyRate;
@@ -155,7 +156,7 @@ const AmortizationCalculator: React.FC = () => {
             
             let actualPayment = pmt + extraPayment;
             
-            // Logic: If extra payment makes principal > balance
+            // Ensure we don't overpay significantly on the last month
             if (balance + interest < actualPayment) {
                 actualPayment = balance + interest;
                 principal = balance;
@@ -174,10 +175,17 @@ const AmortizationCalculator: React.FC = () => {
                 interest,
                 balance
             });
+            
+            // Safety break for very long calculations
+            if(i > 1000) break;
         }
 
         return { rows, pmt, totalInterest };
     }, [amount, rate, months, extraPayment]);
+
+    const pmtValue = schedule.pmt || 0;
+    const totalInt = schedule.totalInterest || 0;
+    const rows = schedule.rows || [];
 
     return (
         <Card className="border-t-4 border-blue-500">
@@ -189,10 +197,9 @@ const AmortizationCalculator: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                  <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Monto Préstamo</label>
-                    <input 
-                        type="number" 
+                    <CurrencyInput 
                         value={amount} 
-                        onChange={e => setAmount(Number(e.target.value))} 
+                        onChange={setAmount} 
                         className="w-full bg-gray-700 text-white p-2 rounded font-mono"
                     />
                 </div>
@@ -216,10 +223,9 @@ const AmortizationCalculator: React.FC = () => {
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Abono Extra Mensual</label>
-                    <input 
-                        type="number" 
+                    <CurrencyInput 
                         value={extraPayment} 
-                        onChange={e => setExtraPayment(Number(e.target.value))} 
+                        onChange={setExtraPayment} 
                         className="w-full bg-gray-700 text-green-400 font-bold p-2 rounded font-mono"
                         placeholder="0"
                     />
@@ -230,21 +236,21 @@ const AmortizationCalculator: React.FC = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                     <div>
                         <p className="text-xs text-gray-500">Cuota Mensual Base</p>
-                        <p className="text-lg font-bold text-white">{formatCurrency(schedule.pmt)}</p>
+                        <p className="text-lg font-bold text-white">{formatCurrency(pmtValue)}</p>
                     </div>
                     <div>
                          <p className="text-xs text-gray-500">Total Intereses</p>
-                         <p className="text-lg font-bold text-yellow-500">{formatCurrency(schedule.totalInterest)}</p>
+                         <p className="text-lg font-bold text-yellow-500">{formatCurrency(totalInt)}</p>
                     </div>
                     <div>
                         <p className="text-xs text-gray-500">Costo Total Crédito</p>
-                        <p className="text-lg font-bold text-blue-400">{formatCurrency(amount + schedule.totalInterest)}</p>
+                        <p className="text-lg font-bold text-blue-400">{formatCurrency(amount + totalInt)}</p>
                     </div>
                      <div>
                         <p className="text-xs text-gray-500">Tiempo Total</p>
-                        <p className="text-lg font-bold text-white">{schedule.rows.length} Meses</p>
-                        {schedule.rows.length < months && (
-                            <span className="text-xs text-green-400 font-bold">¡Te ahorras {months - schedule.rows.length} meses!</span>
+                        <p className="text-lg font-bold text-white">{rows.length} Meses</p>
+                        {months && rows.length < months && (
+                            <span className="text-xs text-green-400 font-bold">¡Te ahorras {months - rows.length} meses!</span>
                         )}
                     </div>
                 </div>
@@ -262,7 +268,7 @@ const AmortizationCalculator: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {schedule.rows.map((row) => (
+                        {rows.map((row) => (
                             <tr key={row.month} className="border-b border-gray-700 bg-gray-800 hover:bg-gray-700">
                                 <td className="px-4 py-3 font-bold">{row.month}</td>
                                 <td className="px-4 py-3 text-white">{formatCurrency(row.payment)}</td>
