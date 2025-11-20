@@ -1,9 +1,11 @@
+
 import React, { useState } from 'react';
 import { Card } from './common/Card';
 import { Spinner } from './common/Spinner';
 import { initialConfigData, businessConfigData } from '../data/initialData';
-import type { ConfigData } from '../types';
-import { HomeIcon, BriefcaseIcon } from './Icons';
+import type { ConfigData, BudgetVariableEgreso } from '../types';
+import { HomeIcon, BriefcaseIcon, TrashIcon } from './Icons';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Entity {
   id: string;
@@ -17,58 +19,141 @@ interface EntitySelectorProps {
   loading: boolean;
 }
 
-type Step = 'name' | 'type' | 'budget' | 'creating';
+type Step = 'name' | 'currency' | 'profile' | 'income' | 'fixed_expenses' | 'creating';
 type EntityType = 'personal' | 'business';
+type Currency = 'COP' | 'USD' | 'EUR' | 'MXN';
+
+// Simple currency formatter helper
+const formatCurrencyInput = (value: number, currency: Currency) => {
+    return new Intl.NumberFormat(currency === 'COP' ? 'es-CO' : 'en-US', {
+        style: 'currency',
+        currency: currency,
+        maximumFractionDigits: 0
+    }).format(value);
+}
 
 export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSelectEntity, onCreateEntity, loading }) => {
   const [step, setStep] = useState<Step>('name');
-  const [newEntityName, setNewEntityName] = useState('');
-  const [entityType, setEntityType] = useState<EntityType>('personal');
-  const [initialIncome, setInitialIncome] = useState<string>('');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
 
+  // Wizard State
+  const [newEntityName, setNewEntityName] = useState('');
+  const [entityType, setEntityType] = useState<EntityType>('personal');
+  const [currency, setCurrency] = useState<Currency>('COP');
+  
+  // Profile State
+  const [employmentType, setEmploymentType] = useState<'employee' | 'independent'>('employee');
+  const [paymentFrequency, setPaymentFrequency] = useState<'monthly' | 'biweekly'>('monthly');
+
+  // Financial State
+  const [initialIncome, setInitialIncome] = useState<number>(0);
+  const [incomeDisplay, setIncomeDisplay] = useState(''); // Formatted string for display
+  const [fixedExpenses, setFixedExpenses] = useState<BudgetVariableEgreso[]>([]);
+  const [newExpenseName, setNewExpenseName] = useState('');
+  const [newExpenseAmount, setNewExpenseAmount] = useState<string>('');
+
   const handleStartCreation = () => {
+    // Reset state
     setStep('name');
     setNewEntityName('');
-    setInitialIncome('');
+    setEntityType('personal');
+    setCurrency('COP');
+    setEmploymentType('employee');
+    setPaymentFrequency('monthly');
+    setInitialIncome(0);
+    setIncomeDisplay('');
+    setFixedExpenses([]);
     setIsWizardOpen(true);
   };
+
+  // --- Handlers ---
 
   const handleNameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEntityName.trim()) return;
-    setStep('type');
+    setStep('currency');
   };
 
-  const handleTypeSelect = (type: EntityType) => {
-      setEntityType(type);
-      setStep('budget');
+  const handleCurrencySelect = (c: Currency) => {
+      setCurrency(c);
+      setStep('profile');
   }
 
-  const handleFinish = async (e: React.FormEvent) => {
+  const handleProfileSubmit = (e: React.FormEvent) => {
       e.preventDefault();
+      setStep('income');
+  }
+
+  const handleIncomeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      // Remove non-numeric chars
+      const rawValue = e.target.value.replace(/\D/g, '');
+      if (!rawValue) {
+          setInitialIncome(0);
+          setIncomeDisplay('');
+          return;
+      }
+      const numericValue = parseInt(rawValue, 10);
+      setInitialIncome(numericValue);
+      setIncomeDisplay(formatCurrencyInput(numericValue, currency));
+  }
+
+  const handleIncomeSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      setStep('fixed_expenses');
+  }
+
+  const handleAddExpense = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newExpenseName || !newExpenseAmount) return;
+      const amount = parseInt(newExpenseAmount.replace(/\D/g, ''), 10);
+      if (isNaN(amount) || amount <= 0) return;
+
+      const newExpense: BudgetVariableEgreso = {
+          id: uuidv4(),
+          name: newExpenseName,
+          totalAmount: amount,
+          category: 'servicios' // Default to servicios for onboarding simplicity
+      };
+
+      setFixedExpenses([...fixedExpenses, newExpense]);
+      setNewExpenseName('');
+      setNewExpenseAmount('');
+  }
+
+  const handleRemoveExpense = (id: string) => {
+      setFixedExpenses(fixedExpenses.filter(e => e.id !== id));
+  }
+
+  const handleFinish = async () => {
       setStep('creating');
       
-      const template = entityType === 'business' 
+      // Clone template
+      const template: ConfigData = entityType === 'business' 
           ? JSON.parse(JSON.stringify(businessConfigData)) 
           : JSON.parse(JSON.stringify(initialConfigData));
       
-      // Inject initial income if provided
-      const incomeAmount = Number(initialIncome);
-      if (!isNaN(incomeAmount) && incomeAmount > 0) {
-          if (template.budgetVariables.ingresos.length > 0) {
-              template.budgetVariables.ingresos[0].totalAmount = incomeAmount;
+      // Update with Wizard Data
+      template.currency = currency;
+      template.employmentType = entityType === 'business' ? 'business' : employmentType;
+      template.paymentFrequency = paymentFrequency;
+
+      // Set Income
+      if (initialIncome > 0) {
+          if (template.budgetVariables.ingresos.length === 0) {
+              template.budgetVariables.ingresos.push({ id: uuidv4(), name: 'Ingreso Principal', totalAmount: initialIncome });
           } else {
-               template.budgetVariables.ingresos.push({
-                   id: 'initial-income', 
-                   name: 'Ingreso Base', 
-                   totalAmount: incomeAmount
-               });
+              template.budgetVariables.ingresos[0].totalAmount = initialIncome;
           }
       }
 
+      // Set Fixed Expenses
+      // Merge with default examples or replace them? Let's keep defaults if user added none, otherwise mix.
+      if (fixedExpenses.length > 0) {
+          // If user added expenses, we append them to the template defaults
+          template.budgetVariables.egresos = [...template.budgetVariables.egresos, ...fixedExpenses];
+      }
+
       await onCreateEntity(newEntityName, template);
-      // App will switch context automatically, but we reset state just in case
       setIsWizardOpen(false);
   };
 
@@ -80,117 +165,231 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
       );
   }
 
-  // Wizard View
+  // --- Wizard Render ---
   if (isWizardOpen) {
+      const progressMap: Record<Step, number> = {
+          'name': 10, 'currency': 30, 'profile': 50, 'income': 70, 'fixed_expenses': 90, 'creating': 100
+      };
+
       return (
           <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-              <Card className="w-full max-w-lg">
+              <Card className="w-full max-w-lg border-2 border-gray-800">
                   <div className="mb-6">
                       <div className="flex justify-between items-center mb-4">
-                           <h2 className="text-2xl font-bold text-white">
+                           <h2 className="text-xl font-bold text-white">
                               {step === 'name' && 'Ponle nombre a tu espacio'}
-                              {step === 'type' && '¿Para qué usarás Gastón?'}
-                              {step === 'budget' && 'Configuración Inicial'}
-                              {step === 'creating' && 'Creando tu espacio...'}
+                              {step === 'currency' && 'Selecciona tu moneda'}
+                              {step === 'profile' && 'Detalles de tu perfil'}
+                              {step === 'income' && 'Configura tus Ingresos'}
+                              {step === 'fixed_expenses' && 'Gastos Fijos Mensuales'}
+                              {step === 'creating' && 'Finalizando...'}
                            </h2>
-                           <div className="text-sm text-gray-500">
-                               {step === 'name' && 'Paso 1 de 3'}
-                               {step === 'type' && 'Paso 2 de 3'}
-                               {step === 'budget' && 'Paso 3 de 3'}
+                           <div className="text-xs text-gray-500">
+                               Progreso: {progressMap[step]}%
                            </div>
                       </div>
-                      <div className="w-full bg-gray-700 h-1 rounded-full">
+                      <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
                           <div 
-                              className="bg-blue-600 h-1 rounded-full transition-all duration-300"
-                              style={{ 
-                                  width: step === 'name' ? '33%' : step === 'type' ? '66%' : '100%' 
-                              }}
+                              className="bg-blue-600 h-full rounded-full transition-all duration-500 ease-out"
+                              style={{ width: `${progressMap[step]}%` }}
                           ></div>
                       </div>
                   </div>
 
+                  {/* STEP 1: NAME */}
                   {step === 'name' && (
-                      <form onSubmit={handleNameSubmit} className="space-y-4">
+                      <form onSubmit={handleNameSubmit} className="space-y-6">
                           <div>
-                              <label className="block text-sm font-medium text-gray-400 mb-2">Nombre de la Entidad</label>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">Nombre del Espacio</label>
                               <input 
                                   autoFocus
                                   type="text" 
                                   value={newEntityName} 
                                   onChange={e => setNewEntityName(e.target.value)}
-                                  placeholder="Ej: Mis Finanzas, Startup Inc..."
-                                  className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white text-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                  placeholder="Ej: Finanzas Casa, Mi Negocio..."
+                                  className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none"
                               />
                           </div>
-                          <div className="flex justify-end space-x-3">
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                                <button 
+                                    type="button"
+                                    onClick={() => setEntityType('personal')}
+                                    className={`p-3 border rounded-lg flex flex-col items-center justify-center space-y-2 transition-all ${entityType === 'personal' ? 'bg-blue-600/20 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'}`}
+                                >
+                                    <HomeIcon className="w-6 h-6" />
+                                    <span className="font-medium">Personal</span>
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={() => setEntityType('business')}
+                                    className={`p-3 border rounded-lg flex flex-col items-center justify-center space-y-2 transition-all ${entityType === 'business' ? 'bg-purple-600/20 border-purple-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'}`}
+                                >
+                                    <BriefcaseIcon className="w-6 h-6" />
+                                    <span className="font-medium">Negocio</span>
+                                </button>
+                          </div>
+
+                          <div className="flex justify-end space-x-3 pt-4">
                               <button type="button" onClick={() => setIsWizardOpen(false)} className="px-4 py-2 text-gray-400 hover:text-white">Cancelar</button>
-                              <button type="submit" disabled={!newEntityName.trim()} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">Continuar</button>
+                              <button type="submit" disabled={!newEntityName.trim()} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">Siguiente</button>
                           </div>
                       </form>
                   )}
 
-                  {step === 'type' && (
+                  {/* STEP 2: CURRENCY */}
+                  {step === 'currency' && (
                       <div className="space-y-4">
-                          <p className="text-gray-400 mb-4">Esto nos ayuda a configurar tus categorías y presupuesto base.</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <button 
-                                  onClick={() => handleTypeSelect('personal')}
-                                  className="p-4 bg-gray-800 border border-gray-600 rounded-lg hover:border-blue-500 hover:bg-gray-750 transition-all group text-left"
-                              >
-                                  <div className="bg-blue-500/20 w-10 h-10 rounded-full flex items-center justify-center mb-3 group-hover:bg-blue-500/30">
-                                      <HomeIcon className="text-blue-400" />
-                                  </div>
-                                  <h3 className="font-bold text-white">Personal</h3>
-                                  <p className="text-sm text-gray-500 mt-1">Gastos del hogar, transporte, entretenimiento...</p>
-                              </button>
-
-                              <button 
-                                  onClick={() => handleTypeSelect('business')}
-                                  className="p-4 bg-gray-800 border border-gray-600 rounded-lg hover:border-purple-500 hover:bg-gray-750 transition-all group text-left"
-                              >
-                                  <div className="bg-purple-500/20 w-10 h-10 rounded-full flex items-center justify-center mb-3 group-hover:bg-purple-500/30">
-                                      <BriefcaseIcon className="text-purple-400" />
-                                  </div>
-                                  <h3 className="font-bold text-white">Negocio / Empresa</h3>
-                                  <p className="text-sm text-gray-500 mt-1">Nómina, impuestos, costos operativos...</p>
-                              </button>
+                          <p className="text-gray-400 mb-4">Elige la moneda principal para tus reportes.</p>
+                          <div className="grid grid-cols-2 gap-3">
+                              {(['COP', 'USD', 'EUR', 'MXN'] as Currency[]).map(c => (
+                                  <button 
+                                    key={c}
+                                    onClick={() => handleCurrencySelect(c)}
+                                    className="p-4 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:border-blue-500 transition-all text-left"
+                                  >
+                                      <span className="text-xl font-bold text-white">{c}</span>
+                                  </button>
+                              ))}
                           </div>
-                          <div className="flex justify-start mt-4">
+                          <div className="flex justify-start mt-6">
                               <button onClick={() => setStep('name')} className="text-sm text-gray-400 hover:text-white">Atrás</button>
                           </div>
                       </div>
                   )}
 
-                  {step === 'budget' && (
-                      <form onSubmit={handleFinish} className="space-y-4">
-                           <p className="text-gray-400">¿Cuál es tu ingreso mensual base estimado? (Opcional)</p>
-                           <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                  <span className="text-gray-500">$</span>
+                  {/* STEP 3: PROFILE (Only if personal) */}
+                  {step === 'profile' && (
+                      entityType === 'personal' ? (
+                        <form onSubmit={handleProfileSubmit} className="space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-3">¿Cuál es tu situación laboral?</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700">
+                                        <input type="radio" name="empType" checked={employmentType === 'employee'} onChange={() => setEmploymentType('employee')} className="form-radio text-blue-600" />
+                                        <span className="ml-3 text-white">Empleado (Salario fijo)</span>
+                                    </label>
+                                    <label className="flex items-center p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-700">
+                                        <input type="radio" name="empType" checked={employmentType === 'independent'} onChange={() => setEmploymentType('independent')} className="form-radio text-blue-600" />
+                                        <span className="ml-3 text-white">Independiente / Freelance</span>
+                                    </label>
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-3">¿Con qué frecuencia recibes ingresos?</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setPaymentFrequency('monthly')}
+                                        className={`p-2 border rounded text-sm ${paymentFrequency === 'monthly' ? 'border-blue-500 bg-blue-600/10 text-blue-400' : 'border-gray-600 text-gray-400'}`}
+                                    >
+                                        Mensual
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setPaymentFrequency('biweekly')}
+                                        className={`p-2 border rounded text-sm ${paymentFrequency === 'biweekly' ? 'border-blue-500 bg-blue-600/10 text-blue-400' : 'border-gray-600 text-gray-400'}`}
+                                    >
+                                        Quincenal
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-4">
+                                <button type="button" onClick={() => setStep('currency')} className="text-sm text-gray-400 hover:text-white">Atrás</button>
+                                <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Siguiente</button>
+                            </div>
+                        </form>
+                      ) : (
+                          // Skip profile for business for now
+                          <div className="text-center py-8">
+                              <p className="text-white mb-4">Configuración de empresa detectada.</p>
+                              <button onClick={() => setStep('income')} className="px-6 py-2 bg-blue-600 text-white rounded-lg">Continuar</button>
+                          </div>
+                      )
+                  )}
+
+                  {/* STEP 4: INCOME */}
+                  {step === 'income' && (
+                      <form onSubmit={handleIncomeSubmit} className="space-y-6">
+                           <div className="text-center mb-8">
+                               <h3 className="text-gray-300 mb-2">¿Cuál es tu ingreso base estimado?</h3>
+                               <p className="text-xs text-gray-500">Escribe el monto sin puntos ni símbolos</p>
+                           </div>
+                           
+                           <div className="relative max-w-xs mx-auto">
                                 <input 
-                                  type="number" 
-                                  value={initialIncome}
-                                  onChange={e => setInitialIncome(e.target.value)}
-                                  placeholder="0.00"
-                                  className="w-full bg-gray-800 border border-gray-600 rounded-lg pl-8 p-3 text-white text-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                  autoFocus
+                                  type="text" 
+                                  value={incomeDisplay}
+                                  onChange={handleIncomeChange}
+                                  placeholder="$ 0"
+                                  className="w-full bg-transparent border-b-2 border-gray-600 text-center text-3xl font-bold text-white focus:border-blue-500 outline-none pb-2 placeholder-gray-700"
                                 />
                            </div>
-                           <p className="text-xs text-gray-500">Podrás cambiar esto más tarde en Configuración.</p>
                            
-                           <div className="flex justify-between items-center mt-6">
-                              <button type="button" onClick={() => setStep('type')} className="text-sm text-gray-400 hover:text-white">Atrás</button>
-                              <button type="submit" className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center">
-                                  <span className="mr-2">Crear Espacio</span>
-                                  {step === 'creating' && <Spinner />}
-                              </button>
+                           <div className="flex justify-between items-center pt-8">
+                              <button type="button" onClick={() => setStep('profile')} className="text-sm text-gray-400 hover:text-white">Atrás</button>
+                              <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Siguiente</button>
                           </div>
                       </form>
                   )}
+
+                  {/* STEP 5: FIXED EXPENSES */}
+                  {step === 'fixed_expenses' && (
+                      <div className="space-y-6">
+                          <p className="text-sm text-gray-400">Agrega tus gastos fijos (Arriendo, Servicios, Gimnasio...). Estos se descontarán automáticamente de tu presupuesto.</p>
+                          
+                          <div className="bg-gray-800/50 p-4 rounded-lg space-y-3 border border-gray-700">
+                               <div className="flex space-x-2">
+                                   <input 
+                                        type="text" 
+                                        placeholder="Concepto (Ej: Arriendo)" 
+                                        value={newExpenseName}
+                                        onChange={e => setNewExpenseName(e.target.value)}
+                                        className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                                   />
+                                   <input 
+                                        type="text" 
+                                        placeholder="Monto" 
+                                        value={newExpenseAmount}
+                                        onChange={e => {
+                                            const val = e.target.value.replace(/\D/g, '');
+                                            setNewExpenseAmount(val ? formatCurrencyInput(parseInt(val), currency) : '');
+                                        }}
+                                        className="w-32 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm text-right"
+                                   />
+                                   <button onClick={handleAddExpense} disabled={!newExpenseName || !newExpenseAmount} className="bg-blue-600 text-white px-3 rounded hover:bg-blue-700 disabled:opacity-50">+</button>
+                               </div>
+                          </div>
+
+                          <div className="max-h-48 overflow-y-auto space-y-2">
+                              {fixedExpenses.length === 0 && <p className="text-center text-xs text-gray-600 italic py-2">No has agregado gastos fijos aún.</p>}
+                              {fixedExpenses.map(expense => (
+                                  <div key={expense.id} className="flex justify-between items-center bg-gray-800 p-3 rounded border border-gray-700">
+                                      <span className="text-gray-200">{expense.name}</span>
+                                      <div className="flex items-center space-x-3">
+                                          <span className="font-mono text-blue-400">{formatCurrencyInput(expense.totalAmount, currency)}</span>
+                                          <button onClick={() => handleRemoveExpense(expense.id)} className="text-gray-500 hover:text-red-400"><TrashIcon className="w-4 h-4" /></button>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+
+                           <div className="flex justify-between items-center pt-4">
+                              <button onClick={() => setStep('income')} className="text-sm text-gray-400 hover:text-white">Atrás</button>
+                              <button onClick={handleFinish} className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center shadow-lg shadow-green-900/20">
+                                  Terminar Configuración
+                              </button>
+                          </div>
+                      </div>
+                  )}
+
                   {step === 'creating' && (
-                      <div className="flex flex-col items-center justify-center py-8">
+                      <div className="flex flex-col items-center justify-center py-12">
                           <Spinner />
-                          <p className="text-gray-400 mt-4">Configurando tu base de datos...</p>
+                          <p className="text-gray-400 mt-4">Creando tu espacio financiero...</p>
                       </div>
                   )}
               </Card>
@@ -198,7 +397,7 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
       );
   }
 
-  // Main Selector View (Welcome Screen)
+  // Welcome Screen
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-4">
       <div className="max-w-4xl w-full">
@@ -210,7 +409,7 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                 Bienvenido a <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Gastón</span>
             </h1>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-                Tu asistente financiero minimalista. Gestiona múltiples perfiles, empresas o presupuestos de viaje sin complicaciones.
+                Tu asistente financiero inteligente.
             </p>
         </div>
 
@@ -239,8 +438,8 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                     <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center">
                          <div className="text-gray-400">+</div>
                     </div>
-                    <h3 className="text-xl font-bold text-white">¿Nuevo Proyecto?</h3>
-                    <p className="text-gray-400 text-center">Crea un espacio separado para otro negocio, una meta personal o un viaje en grupo.</p>
+                    <h3 className="text-xl font-bold text-white">¿Nuevo Objetivo?</h3>
+                    <p className="text-gray-400 text-center">Crea un presupuesto separado para otro proyecto o negocio.</p>
                     <button 
                         onClick={handleStartCreation}
                         className="px-8 py-3 bg-white text-gray-900 font-bold rounded-full hover:bg-gray-100 transition-colors transform hover:scale-105"
@@ -259,7 +458,6 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                         Empezar Ahora <span className="ml-2 group-hover:translate-x-1 transition-transform">→</span>
                     </span>
                 </button>
-                <p className="mt-4 text-sm text-gray-500">No requiere registro. Tus datos son tuyos.</p>
             </div>
         )}
       </div>

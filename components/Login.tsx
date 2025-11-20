@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebaseService';
+import { sendWelcomeEmail } from '../services/notificationService';
 import { Spinner } from './common/Spinner';
 import { CopyIcon } from './Icons';
 
@@ -18,7 +19,9 @@ const Login: React.FC = () => {
         setError(null);
         setUnauthorizedDomain(null);
         try {
-            await signInWithPopup(auth, googleProvider);
+            const result = await signInWithPopup(auth, googleProvider);
+            // Optional: Check if it's a new user using result.additionalUserInfo.isNewUser
+            // and send welcome email if true.
         } catch (err: any) {
             console.error("Google login error:", err);
             if (err.code === 'auth/unauthorized-domain') {
@@ -43,6 +46,8 @@ const Login: React.FC = () => {
         try {
             if (isSignUp) {
                 await createUserWithEmailAndPassword(auth, email, password);
+                // Send notification
+                await sendWelcomeEmail(email);
             } else {
                 await signInWithEmailAndPassword(auth, email, password);
             }

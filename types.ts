@@ -45,6 +45,9 @@ export interface Debt {
 }
 
 export interface ConfigData {
+    currency: string; // 'COP', 'USD', etc.
+    employmentType: 'employee' | 'independent' | 'business'; 
+    paymentFrequency: 'monthly' | 'biweekly' | 'weekly' | 'irregular';
     categories: string[];
     savingsGoals: SavingsGoal[];
     budgetVariables: {

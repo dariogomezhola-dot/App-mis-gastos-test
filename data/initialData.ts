@@ -2,6 +2,9 @@
 import type { GastosData, ViajeData, ConfigData } from '../types';
 
 export const initialConfigData: ConfigData = {
+    currency: 'COP',
+    employmentType: 'employee',
+    paymentFrequency: 'monthly',
     categories: ['servicios', 'mercado', 'transporte', 'comida_calle', 'domicilios', 'regalos', 'deudas', 'otro'],
     savingsGoals: [
         {
@@ -26,6 +29,9 @@ export const initialConfigData: ConfigData = {
 };
 
 export const businessConfigData: ConfigData = {
+    currency: 'COP',
+    employmentType: 'business',
+    paymentFrequency: 'monthly',
     categories: ['nomina', 'impuestos', 'materia_prima', 'logistica', 'marketing', 'alquiler', 'servicios', 'otro'],
     savingsGoals: [
         { id: 'sg-exp-1', name: 'Fondo de Expansión', targetAmount: 50000000, currentAmount: 0 }

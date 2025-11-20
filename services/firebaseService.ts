@@ -22,7 +22,8 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-export const appId = firebaseConfig.projectId;
+// CHANGED: Updated to "gaston_v3_clean" to wipe previous data and start fresh with the new onboarding
+export const appId = "gaston_v3_clean";
 
 export const getConfigHistoryDocRef = (entityId: string, yearMonth: string) => {
     return doc(db, 'artifacts', appId, 'entities', entityId, 'config_history', yearMonth);
