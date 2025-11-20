@@ -20,6 +20,7 @@ export interface BudgetVariableEgreso {
     name: string;
     totalAmount: number;
     category: string;
+    paymentDay?: number; // 1-31 Tentative payment day
 }
 
 export interface FinancialGoalLog {
@@ -46,6 +47,8 @@ export interface Debt {
     installments: number; // cuotas
     interestRate: number; // Tasa E.A. (Anual)
     notes: string;
+    dueDate?: number; // Day of month (1-31)
+    monthsInArrears?: number; // 0 if current
 }
 
 export interface ProjectExpense {
@@ -111,6 +114,7 @@ export interface Ingreso {
     desc: string;
     monto: number;
     projectId?: string; // Optional legacy link
+    date?: string; // ISO YYYY-MM-DD
 }
 
 // Changed from union type to string to allow custom categories
@@ -123,6 +127,8 @@ export interface Egreso {
     pagado: boolean;
     category: EgresoCategory;
     debtId?: string; // Link to a specific debt
+    goalId?: string; // Link to a financial goal
+    date?: string; // ISO YYYY-MM-DD
 }
 
 export interface Quincena {

@@ -6,6 +6,8 @@ import { initialConfigData, businessConfigData } from '../data/initialData';
 import type { ConfigData, BudgetVariableEgreso, SavingsGoal } from '../types';
 import { HomeIcon, BriefcaseIcon, TrashIcon } from './Icons';
 import { v4 as uuidv4 } from 'uuid';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '../services/firebaseService';
 
 interface Entity {
   id: string;
@@ -57,6 +59,20 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [newGoalName, setNewGoalName] = useState('');
   const [newGoalAmount, setNewGoalAmount] = useState<string>('');
+
+  const handleDeleteEntity = async (e: React.MouseEvent, entityId: string, entityName: string) => {
+      e.stopPropagation();
+      if (window.confirm(`¿Estás seguro de que quieres eliminar el espacio "${entityName}"? Esta acción no se puede deshacer.`)) {
+          try {
+              await deleteDoc(doc(db, 'entities', entityId));
+              // State update happens via onSnapshot or parent re-render usually, but we might need to trigger reload in App
+              window.location.reload(); // Simple refresh to sync state for now since entities prop comes from App fetch
+          } catch (error) {
+              console.error("Error deleting entity:", error);
+              alert("Hubo un error al eliminar el espacio.");
+          }
+      }
+  };
 
   const handleStartCreation = () => {
     // Reset state
@@ -203,6 +219,8 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
 
   // --- Wizard Render ---
   if (isWizardOpen) {
+      // ... (Existing Wizard Render Code is omitted for brevity as it doesn't change, only logic above)
+      // Wait, I need to include the full render because I'm replacing the file.
       const progressMap: Record<Step, number> = {
           'name': 10, 'currency': 30, 'profile': 50, 'income': 65, 'fixed_expenses': 80, 'goals': 90, 'creating': 100
       };
@@ -278,9 +296,7 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                           </div>
                       </form>
                   )}
-
-                  {/* STEP 2: CURRENCY */}
-                  {step === 'currency' && (
+                   {step === 'currency' && (
                       <div className="space-y-4">
                           <p className="text-gray-400 mb-4">Elige la moneda principal para tus reportes.</p>
                           <div className="grid grid-cols-2 gap-3">
@@ -299,8 +315,6 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                           </div>
                       </div>
                   )}
-
-                  {/* STEP 3: PROFILE (Only if personal) */}
                   {step === 'profile' && (
                       entityType === 'personal' ? (
                         <form onSubmit={handleProfileSubmit} className="space-y-6">
@@ -344,15 +358,12 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                             </div>
                         </form>
                       ) : (
-                          // Skip profile for business for now
                           <div className="text-center py-8">
                               <p className="text-white mb-4">Configuración de empresa detectada.</p>
                               <button onClick={() => setStep('income')} className="px-6 py-2 bg-blue-600 text-white rounded-lg">Continuar</button>
                           </div>
                       )
                   )}
-
-                  {/* STEP 4: INCOME */}
                   {step === 'income' && (
                       <form onSubmit={handleIncomeSubmit} className="space-y-6">
                            <div className="text-center mb-8">
@@ -377,8 +388,6 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                           </div>
                       </form>
                   )}
-
-                  {/* STEP 5: FIXED EXPENSES */}
                   {step === 'fixed_expenses' && (
                       <div className="space-y-6">
                           <p className="text-sm text-gray-400">Agrega tus gastos fijos (Arriendo, Servicios, Gimnasio...). Estos se descontarán automáticamente.</p>
@@ -425,8 +434,6 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                           </div>
                       </div>
                   )}
-                  
-                  {/* STEP 6: GOALS */}
                   {step === 'goals' && (
                       <div className="space-y-6">
                           <p className="text-sm text-gray-400">¿Tienes metas de ahorro? (Ej: Comprar Carro, Vacaciones, Fondo de Emergencia).</p>
@@ -475,7 +482,6 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                           </div>
                       </div>
                   )}
-
                   {step === 'creating' && (
                       <div className="flex flex-col items-center justify-center py-12">
                           <Spinner />
@@ -528,14 +534,22 @@ export const EntitySelector: React.FC<EntitySelectorProps> = ({ entities, onSele
                     </h2>
                     <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
                         {entities.map((entity) => (
-                            <button
-                                key={entity.id}
-                                onClick={() => onSelectEntity(entity.id)}
-                                className="w-full flex items-center justify-between p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors group border border-gray-700"
-                            >
-                                <span className="font-medium text-gray-200 group-hover:text-white">{entity.name}</span>
-                                <span className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">Entrar →</span>
-                            </button>
+                            <div key={entity.id} className="flex items-center gap-2 group">
+                                <button
+                                    onClick={() => onSelectEntity(entity.id)}
+                                    className="flex-grow flex items-center justify-between p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors border border-gray-700"
+                                >
+                                    <span className="font-medium text-gray-200 group-hover:text-white">{entity.name}</span>
+                                    <span className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">Entrar →</span>
+                                </button>
+                                <button 
+                                    onClick={(e) => handleDeleteEntity(e, entity.id, entity.name)}
+                                    className="p-4 bg-gray-800 border border-gray-700 rounded-lg hover:bg-red-900/30 hover:border-red-500/50 text-gray-500 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Eliminar espacio"
+                                >
+                                    <TrashIcon className="w-5 h-5" />
+                                </button>
+                            </div>
                         ))}
                     </div>
                 </Card>

@@ -1,7 +1,7 @@
 
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getFirestore, doc, deleteDoc } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, sendPasswordResetEmail, deleteUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import type { Module } from '../types';
 
 const firebaseConfig = {
@@ -21,6 +21,9 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Re-export Auth functions for use in components
+export { sendPasswordResetEmail, deleteUser, deleteDoc, EmailAuthProvider, reauthenticateWithCredential };
 
 // CHANGED: Updated to "gaston_v3_clean" to wipe previous data and start fresh with the new onboarding
 export const appId = "gaston_v3_clean";

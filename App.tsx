@@ -8,13 +8,13 @@ import ResumenGeneral from './modules/ResumenGeneral';
 import Configuracion from './modules/Configuracion';
 import Login from './components/Login';
 import { Spinner } from './components/common/Spinner';
-import { db, auth } from './services/firebaseService';
+import { db, auth, getDataDocRef } from './services/firebaseService';
 import { collection, getDocs, addDoc, setDoc, query, where } from 'firebase/firestore';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import type { Module, ConfigData } from './types';
 import { EntitySelector } from './components/EntitySelector';
 import { blankGastosData } from './data/initialData';
-import { getDataDocRef } from './services/firebaseService';
+import { UserProfileModal } from './components/UserProfileModal';
 
 interface Entity {
   id: string;
@@ -30,6 +30,7 @@ const App: React.FC = () => {
     const [entitiesLoading, setEntitiesLoading] = useState(false);
     const [activeModule, setActiveModule] = useState<Module>('resumen');
     const [isSidebarOpen, setSidebarOpen] = useState(false);
+    const [isProfileOpen, setProfileOpen] = useState(false);
     
     // Auth Listener
     useEffect(() => {
@@ -190,6 +191,7 @@ const App: React.FC = () => {
                 activeEntityName={activeEntity.name}
                 onSwitchEntity={handleSwitchEntity}
                 onSignOut={handleSignOut}
+                onOpenProfile={() => setProfileOpen(true)}
                 activeModule={activeModule} 
                 setActiveModule={setActiveModule} 
                 isSidebarOpen={isSidebarOpen}
@@ -200,6 +202,12 @@ const App: React.FC = () => {
                     {renderModule()}
                 </div>
             </main>
+
+            <UserProfileModal 
+                isOpen={isProfileOpen} 
+                onClose={() => setProfileOpen(false)}
+                userEmail={user.email}
+            />
         </div>
     );
 };

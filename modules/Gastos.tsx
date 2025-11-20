@@ -2,16 +2,17 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useFirestoreDoc } from '../hooks/useFirestoreDoc';
 import { blankGastosData, initialConfigData } from '../data/initialData';
-import type { GastosData, Quincena, Ingreso, Egreso, EgresoCategory, Debt, ConfigData, BudgetVariableIngreso, BudgetVariableEgreso } from '../types';
+import type { GastosData, Quincena, Ingreso, Egreso, EgresoCategory, Debt, ConfigData, BudgetVariableIngreso, BudgetVariableEgreso, FinancialGoal, FinancialGoalLog } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { Spinner } from '../components/common/Spinner';
 import { MonthSelector } from '../components/MonthSelector';
-import { EditIcon, CheckIcon, XIcon, TrashIcon, CopyIcon, DownloadIcon, RepeatIcon } from '../components/Icons';
+import { EditIcon, CheckIcon, XIcon, TrashIcon, CopyIcon, DownloadIcon, RepeatIcon, ZapIcon } from '../components/Icons';
 import { v4 as uuidv4 } from 'uuid';
 import { writeBatch, doc } from 'firebase/firestore';
-import { db, appId } from '../services/firebaseService';
+import { db, appId, getDataDocRef } from '../services/firebaseService';
+import { CurrencyInput } from '../components/common/CurrencyInput';
 
 interface ModuleProps {
     entityId: string;
@@ -45,8 +46,10 @@ const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onTogg
 
         const newFormState = { ...editForm, monto };
         
-        if ('category' in newFormState && (newFormState as Egreso).category !== 'deudas') {
-            delete (newFormState as Partial<Egreso>).debtId;
+        if ('category' in newFormState) {
+            const egreso = newFormState as Egreso;
+             if (egreso.category !== 'deudas') delete (egreso as Partial<Egreso>).debtId;
+             if (egreso.category !== 'abono_meta') delete (egreso as Partial<Egreso>).goalId;
         }
 
         onSave(newFormState);
@@ -55,12 +58,10 @@ const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onTogg
 
     const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const newCategory = e.target.value;
-        
         setEditForm(prevForm => {
             const newFormState = { ...prevForm, category: newCategory };
-            if (newCategory !== 'deudas' && 'debtId' in newFormState) {
-                delete (newFormState as Partial<Egreso>).debtId;
-            }
+            if (newCategory !== 'deudas' && 'debtId' in newFormState) delete (newFormState as Partial<Egreso>).debtId;
+            if (newCategory !== 'abono_meta' && 'goalId' in newFormState) delete (newFormState as Partial<Egreso>).goalId;
             return newFormState;
         });
     };
@@ -71,7 +72,13 @@ const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onTogg
     if (isEditing) {
         return (
             <li className="flex flex-col sm:flex-row justify-between sm:items-center py-2 border-b border-gray-700 bg-gray-700/50 p-2 rounded-md space-y-2 sm:space-y-0">
-                <div className="flex-grow flex flex-col sm:flex-row sm:items-center sm:space-x-2">
+                <div className="flex-grow flex flex-col sm:flex-row sm:items-center sm:space-x-2 gap-2">
+                    <input 
+                        type="date"
+                        value={editForm.date || ''}
+                        onChange={(e) => setEditForm({...editForm, date: e.target.value})}
+                        className="bg-gray-600 text-white rounded px-2 py-1 text-xs w-24"
+                    />
                     <input 
                         type="text" 
                         value={editForm.desc} 
@@ -86,6 +93,7 @@ const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onTogg
                         >
                             {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                             <option value="deudas">Deudas</option>
+                            <option value="abono_meta">Abono a Meta</option>
                         </select>
                     )}
                     {isEgreso && egresoForm.category === 'deudas' && (
@@ -100,10 +108,9 @@ const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onTogg
                     )}
                 </div>
                 <div className="flex items-center space-x-2 self-end sm:self-center">
-                    <input 
-                        type="number" 
+                    <CurrencyInput 
                         value={editForm.monto} 
-                        onChange={(e) => setEditForm({...editForm, monto: Number(e.target.value)})}
+                        onChange={(val) => setEditForm({...editForm, monto: val})}
                         className="bg-gray-600 text-white rounded px-2 py-1 w-32 text-right"
                     />
                     {extraContent}
@@ -117,14 +124,22 @@ const EditableListItem: React.FC<EditableItemProps> = ({ item, isEditing, onTogg
     const debtName = isEgreso && egresoForm.category === 'deudas' && egresoForm.debtId
         ? debts.find(d => d.id === egresoForm.debtId)?.name
         : null;
+    
+    const goalName = isEgreso && egresoForm.category === 'abono_meta' && egresoForm.goalId
+        ? configData.financialGoals?.find(g => g.id === egresoForm.goalId)?.name
+        : null;
 
     return (
          <li className="flex justify-between items-center py-2 border-b border-gray-700 group">
             <div className="flex flex-col">
-                <span>{item.desc}</span>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
+                    {item.date && <span className="text-[10px] text-gray-500 font-mono">{new Date(item.date).getDate()}/{new Date(item.date).getMonth()+1}</span>}
+                    <span>{item.desc}</span>
+                </div>
+                <div className="flex items-center space-x-2 ml-8 sm:ml-0">
                      { 'category' in item && <span className="text-xs text-gray-500 capitalize">{item.category}</span> }
                      {debtName && <span className="text-xs text-blue-400 bg-blue-500/10 px-1 rounded-sm">{debtName}</span>}
+                     {goalName && <span className="text-xs text-purple-400 bg-purple-500/10 px-1 rounded-sm">Meta: {goalName}</span>}
                 </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -146,45 +161,69 @@ const AddTransactionForm: React.FC<{
     configData: ConfigData;
     updateConfigData: (newData: Partial<ConfigData>) => Promise<void>;
     quincenaKey: 'q1' | 'q2';
-}> = ({ type, onClose, data, updateData, configData, updateConfigData, quincenaKey }) => {
-    const [desc, setDesc] = useState('');
-    const [monto, setMonto] = useState(0);
+    defaultDate?: string; // To support Quick Add
+    defaultDesc?: string;
+    defaultMonto?: number;
+}> = ({ type, onClose, data, updateData, configData, updateConfigData, quincenaKey, defaultDate, defaultDesc, defaultMonto }) => {
+    const [desc, setDesc] = useState(defaultDesc || '');
+    const [monto, setMonto] = useState(defaultMonto || 0);
+    const [date, setDate] = useState(defaultDate || new Date().toISOString().split('T')[0]);
     const [category, setCategory] = useState<string>('otro');
     const [debtId, setDebtId] = useState<string>('');
+    const [goalId, setGoalId] = useState<string>('');
 
     const { categories } = configData;
 
-    const handleManualSubmit = (e: React.FormEvent) => {
+    const handleManualSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!desc || monto <= 0) return;
 
+        // If date provided, determine correct Quincena and Month document
+        // Note: This generic form operates on the "current view" data props. 
+        // Quick Add logic handles cross-month updates separately. This form assumes we are in context.
+        
         const updatedData = JSON.parse(JSON.stringify(data));
         
         if (type === 'ingreso') {
-            const newItem: Ingreso = { id: uuidv4(), desc, monto };
+            const newItem: Ingreso = { id: uuidv4(), desc, monto, date };
             updatedData[quincenaKey].ingresos.push(newItem);
         } else {
             const newEgreso: Egreso = {
-                id: uuidv4(), desc, monto, pagado: false, category,
+                id: uuidv4(), desc, monto, pagado: false, category, date
             };
-            if (category === 'deudas' && debtId) {
-                newEgreso.debtId = debtId;
-            } else {
-                 delete (newEgreso as Partial<Egreso>).debtId;
+            
+            if (category === 'deudas' && debtId) newEgreso.debtId = debtId;
+            if (category === 'abono_meta' && goalId) {
+                 newEgreso.goalId = goalId;
+                 // Update Goal Balance
+                 const updatedConfig = JSON.parse(JSON.stringify(configData));
+                 const goal = updatedConfig.financialGoals?.find((g: FinancialGoal) => g.id === goalId);
+                 if (goal) {
+                     goal.currentAmount += monto;
+                     goal.logs.unshift({
+                         id: uuidv4(),
+                         date: date,
+                         amount: monto,
+                         note: `Abono desde Gastos: ${desc}`
+                     });
+                     await updateConfigData(updatedConfig);
+                 }
             }
+            
             updatedData[quincenaKey].egresos.push(newEgreso);
         }
         
-        updateData(updatedData);
+        await updateData(updatedData);
         onClose();
     }
 
     const handleBudgetAdd = (variable: BudgetVariableIngreso | BudgetVariableEgreso, split: boolean) => {
         const updatedData = JSON.parse(JSON.stringify(data));
         const amount = split ? variable.totalAmount / 2 : variable.totalAmount;
+        const itemDate = date; // Use current selected date
         
         if ('category' in variable) {
-             const newEgreso: Egreso = { id: uuidv4(), desc: variable.name, monto: amount, category: variable.category, pagado: false };
+             const newEgreso: Egreso = { id: uuidv4(), desc: variable.name, monto: amount, category: variable.category, pagado: false, date: itemDate };
              if (split) {
                  updatedData.q1.egresos.push(newEgreso);
                  updatedData.q2.egresos.push({...newEgreso, id: uuidv4()});
@@ -192,7 +231,7 @@ const AddTransactionForm: React.FC<{
                  updatedData[quincenaKey].egresos.push(newEgreso);
              }
         } else {
-            const newIngreso: Ingreso = { id: uuidv4(), desc: variable.name, monto: amount };
+            const newIngreso: Ingreso = { id: uuidv4(), desc: variable.name, monto: amount, date: itemDate };
             if (split) {
                  updatedData.q1.ingresos.push(newIngreso);
                  updatedData.q2.ingresos.push({...newIngreso, id: uuidv4()});
@@ -222,13 +261,17 @@ const AddTransactionForm: React.FC<{
             </>
 
             <form onSubmit={handleManualSubmit} className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
+                <div className="sm:col-span-2">
+                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Fecha</label>
+                     <input type="date" value={date} onChange={e => setDate(e.target.value)} className="bg-gray-700 p-2 rounded w-full text-white text-sm"/>
+                </div>
                 <div className="sm:col-span-4">
                      <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Descripción</label>
                      <input type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ej: Compras" className="bg-gray-700 p-2 rounded w-full text-white"/>
                 </div>
                 <div className="sm:col-span-3">
                      <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Monto</label>
-                     <input type="number" value={monto} onChange={e => setMonto(Number(e.target.value))} placeholder="0" className="bg-gray-700 p-2 rounded w-full text-white"/>
+                     <CurrencyInput value={monto} onChange={setMonto} placeholder="0" className="bg-gray-700 p-2 rounded w-full text-white"/>
                 </div>
 
                 {type === 'egreso' && (
@@ -237,11 +280,18 @@ const AddTransactionForm: React.FC<{
                          <select value={category} onChange={e => setCategory(e.target.value)} className="bg-gray-700 p-2 rounded w-full text-white">
                             {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                             <option value="deudas">Deuda</option>
+                            <option value="abono_meta">Abono a Meta</option>
                         </select>
                         {category === 'deudas' && (
                              <select value={debtId} onChange={e => setDebtId(e.target.value)} className="bg-gray-700 p-2 rounded w-full text-white mt-2">
                                 <option value="">Seleccionar Deuda</option>
                                 {configData.debts.map(debt => <option key={debt.id} value={debt.id}>{debt.name}</option>)}
+                            </select>
+                        )}
+                        {category === 'abono_meta' && (
+                             <select value={goalId} onChange={e => setGoalId(e.target.value)} className="bg-gray-700 p-2 rounded w-full text-white mt-2">
+                                <option value="">Seleccionar Meta</option>
+                                {configData.financialGoals?.map(goal => <option key={goal.id} value={goal.id}>{goal.name}</option>)}
                             </select>
                         )}
                     </div>
@@ -255,10 +305,6 @@ const AddTransactionForm: React.FC<{
         </Card>
     );
 }
-
-// ... (Rest of the file including QuincenaView, Resumen, Gastos, CopyMonthModal remains structurally same but imports updated)
-// For brevity in the prompt response, assuming the rest is concatenated here or unchanged in logic, 
-// but I must return FULL CONTENT. I will append the rest of the file content below.
 
 const QuincenaView: React.FC<{
     quincena: Quincena;
@@ -330,7 +376,8 @@ const QuincenaView: React.FC<{
                 id: uuidv4(),
                 name: item.desc,
                 totalAmount: item.monto, 
-                category: item.category
+                category: item.category,
+                paymentDay: item.date ? new Date(item.date).getDate() : undefined
             });
         } else {
             updatedConfig.budgetVariables.ingresos.push({
@@ -453,11 +500,11 @@ const Resumen: React.FC<{
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="flex items-center space-x-2">
                      <label className="font-semibold text-gray-400">Ahorros Q1:</label>
-                    <input type="number" value={data.q1?.ahorros ?? 0} onBlur={(e) => handleAhorrosChange('q1', Number(e.target.value))} onChange={(e) => handleAhorrosChange('q1', Number(e.target.value))} placeholder="Ahorros Q1" className="bg-gray-700 p-2 rounded w-full text-white"/>
+                     <CurrencyInput value={data.q1?.ahorros ?? 0} onChange={val => handleAhorrosChange('q1', val)} placeholder="Ahorros Q1" className="bg-gray-700 p-2 rounded w-full text-white"/>
                 </div>
                 <div className="flex items-center space-x-2">
                     <label className="font-semibold text-gray-400">Ahorros Q2:</label>
-                    <input type="number" value={data.q2?.ahorros ?? 0} onBlur={(e) => handleAhorrosChange('q2', Number(e.target.value))} onChange={(e) => handleAhorrosChange('q2', Number(e.target.value))} placeholder="Ahorros Q2" className="bg-gray-700 p-2 rounded w-full text-white"/>
+                    <CurrencyInput value={data.q2?.ahorros ?? 0} onChange={val => handleAhorrosChange('q2', val)} placeholder="Ahorros Q2" className="bg-gray-700 p-2 rounded w-full text-white"/>
                 </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
@@ -486,26 +533,105 @@ const Resumen: React.FC<{
     )
 }
 
-const IntegratedSummary: React.FC<{ configData: ConfigData | null }> = ({ configData }) => {
-    const totalMonthlyDebtPayment = configData?.debts.reduce((sum, debt) => {
-        const remaining = debt.totalAmount - debt.paidAmount;
-        if (remaining > 0 && debt.installments > 0) {
-            return sum + (debt.totalAmount / debt.installments);
+const QuickAddModal: React.FC<{
+    onClose: () => void;
+    entityId: string;
+    configData: ConfigData;
+    updateConfigData: (d: Partial<ConfigData>) => Promise<void>;
+}> = ({ onClose, entityId, configData, updateConfigData }) => {
+    const [desc, setDesc] = useState('');
+    const [monto, setMonto] = useState(0);
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [category, setCategory] = useState<string>('otro');
+    const [saving, setSaving] = useState(false);
+
+    // Reusing logic similar to AddTransaction but simplified for "Quick Add"
+    const handleQuickSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!desc || monto <= 0) return;
+        setSaving(true);
+
+        try {
+            const inputDate = new Date(date);
+            // 1. Determine Month Document
+            const yearMonth = getYearMonth(inputDate);
+            
+            // 2. Determine Quincena
+            const day = inputDate.getDate();
+            const isMonthly = configData.paymentFrequency === 'monthly';
+            const quincenaKey = isMonthly ? 'q1' : (day <= 15 ? 'q1' : 'q2');
+
+            // 3. Fetch existing doc for that month (might be different from current view)
+            const docRef = getDataDocRef(entityId, 'gastos', yearMonth);
+            const { getDoc, setDoc } = await import('firebase/firestore');
+            const docSnap = await getDoc(docRef);
+            
+            let monthData = blankGastosData;
+            if (docSnap.exists()) {
+                monthData = docSnap.data() as GastosData;
+            }
+
+            // 4. Add Item
+            const newEgreso: Egreso = {
+                id: uuidv4(),
+                desc: `⚡ ${desc}`, // Mark as quick add
+                monto,
+                pagado: false,
+                category,
+                date
+            };
+            monthData[quincenaKey].egresos.push(newEgreso);
+
+            // 5. Save
+            await setDoc(docRef, monthData);
+            onClose();
+        } catch (error) {
+            console.error("Quick add failed", error);
+            alert("Error al guardar el gasto rápido.");
+        } finally {
+            setSaving(false);
         }
-        return sum;
-    }, 0) ?? 0;
+    };
 
     return (
-        <Card>
-            <div className="grid grid-cols-1 gap-4 text-center">
-                <div className="p-2">
-                    <p className="text-sm text-yellow-400">Pago Deudas (Estimado Mensual)</p>
-                    <p className="text-xl font-bold text-white">{formatCurrency(totalMonthlyDebtPayment)}</p>
+        <div className="fixed inset-0 bg-black/80 flex items-end sm:items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 w-full max-w-md rounded-xl border border-yellow-500/30 shadow-2xl shadow-yellow-900/20 p-6 animate-slideUp sm:animate-fadeIn">
+                <div className="flex items-center gap-2 mb-4 text-yellow-400">
+                    <ZapIcon className="w-6 h-6" />
+                    <h3 className="text-xl font-bold text-white">Gasto Rápido</h3>
                 </div>
+                
+                <form onSubmit={handleQuickSubmit} className="space-y-4">
+                    <div>
+                        <label className="text-xs text-gray-500 uppercase font-bold">Fecha</label>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-lg mt-1" />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500 uppercase font-bold">Descripción</label>
+                        <input autoFocus type="text" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ej: Taxi, Café, Antojo..." className="w-full bg-gray-700 text-white p-3 rounded-lg mt-1" />
+                    </div>
+                    <div>
+                         <label className="text-xs text-gray-500 uppercase font-bold">Monto</label>
+                         <CurrencyInput value={monto} onChange={setMonto} placeholder="0" className="w-full bg-gray-700 text-white p-3 rounded-lg mt-1 font-mono text-lg" />
+                    </div>
+                    <div>
+                         <label className="text-xs text-gray-500 uppercase font-bold">Categoría</label>
+                         <select value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-lg mt-1">
+                            {configData.categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                    </div>
+                    
+                    <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={onClose} className="flex-1 bg-gray-700 text-white py-3 rounded-lg font-bold hover:bg-gray-600">Cancelar</button>
+                        <button type="submit" disabled={saving} className="flex-1 bg-yellow-600 text-white py-3 rounded-lg font-bold hover:bg-yellow-500 shadow-lg shadow-yellow-600/20">
+                            {saving ? <Spinner /> : 'Registrar Gasto'}
+                        </button>
+                    </div>
+                </form>
             </div>
-        </Card>
-    )
-}
+        </div>
+    );
+};
 
 const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -516,6 +642,7 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
 
     const [activeTab, setActiveTab] = useState<'q1' | 'q2'>('q1');
     const [isCopyModalOpen, setCopyModalOpen] = useState(false);
+    const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     
     const saveTimeoutRef = useRef<number | null>(null);
@@ -599,20 +726,37 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
         
         const isMonthly = configData.paymentFrequency === 'monthly';
         
+        // Helper to guess date for budget items
+        const getTentativeDate = (day?: number, quincena: 'q1' | 'q2' = 'q1') => {
+            const y = currentDate.getFullYear();
+            const m = currentDate.getMonth();
+            let d = day || 1;
+            if (quincena === 'q2' && d < 16) d = 16; // fallback
+            return new Date(y, m, d).toISOString().split('T')[0];
+        }
+
         // If monthly, put everything in Q1. If biweekly, split by 2.
         budget.ingresos.forEach(ing => {
             const amount = isMonthly ? ing.totalAmount : ing.totalAmount / 2;
-            newGastosData.q1.ingresos.push({ id: uuidv4(), desc: ing.name, monto: amount });
+            newGastosData.q1.ingresos.push({ id: uuidv4(), desc: ing.name, monto: amount, date: getTentativeDate(1) });
             if (!isMonthly) {
-                newGastosData.q2.ingresos.push({ id: uuidv4(), desc: ing.name, monto: amount });
+                newGastosData.q2.ingresos.push({ id: uuidv4(), desc: ing.name, monto: amount, date: getTentativeDate(16, 'q2') });
             }
         });
         
         budget.egresos.forEach(egr => {
             const amount = isMonthly ? egr.totalAmount : egr.totalAmount / 2;
-            newGastosData.q1.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false });
-            if (!isMonthly) {
-                newGastosData.q2.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false });
+            const pDay = egr.paymentDay;
+            
+            // Logic to place in Q1 or Q2 based on payment day
+            if (isMonthly) {
+                 newGastosData.q1.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false, date: getTentativeDate(pDay) });
+            } else {
+                // Biweekly logic: Split amount? Or place in specific quincena based on date?
+                // Prompt requested simple logic previously, sticking to split for safety unless user configured dates rigidly.
+                // Let's just split for now to avoid confusion, but use the payment day if it falls in the range.
+                newGastosData.q1.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false, date: getTentativeDate(pDay && pDay <= 15 ? pDay : 1) });
+                newGastosData.q2.egresos.push({ id: uuidv4(), desc: egr.name, monto: amount, category: egr.category, pagado: false, date: getTentativeDate(pDay && pDay > 15 ? pDay : 16, 'q2') });
             }
         });
 
@@ -629,7 +773,7 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
         const processItems = (items: any[], type: 'Ingreso' | 'Egreso', q: string) => {
             items.forEach(item => {
                 rows.push([
-                    yearMonth,
+                    item.date || yearMonth,
                     q,
                     type,
                     `"${item.desc}"`,
@@ -664,6 +808,18 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
     }, []);
 
     const loading = gastosLoading || configLoading;
+    const isMonthly = configData?.paymentFrequency === 'monthly';
+
+    // Floating Action Button for Quick Add
+    const FAB = () => (
+        <button 
+            onClick={() => setIsQuickAddOpen(true)}
+            className="fixed bottom-6 right-6 w-14 h-14 bg-yellow-500 hover:bg-yellow-400 text-gray-900 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-110 z-40"
+            title="Gasto Rápido (Hormiga)"
+        >
+            <ZapIcon className="w-8 h-8" />
+        </button>
+    );
 
     const TabButton: React.FC<{ tabKey: 'q1' | 'q2', label: string }> = ({ tabKey, label }) => (
         <button
@@ -678,26 +834,17 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
 
     const SaveStatusIndicator = () => {
         if (saveStatus === 'idle') return null;
-        
-        const statusConfig = {
-            saving: { text: 'Guardando...', bg: 'bg-yellow-500/80' },
-            saved: { text: 'Guardado ✓', bg: 'bg-green-500/80' }
-        };
-
-        const config = statusConfig[saveStatus];
-
-        return (
-             <div className={`fixed top-20 right-8 z-50 px-4 py-2 rounded-md text-white text-sm ${config.bg} transition-opacity duration-300`}>
-                {config.text}
-            </div>
-        )
+        const config = saveStatus === 'saving' ? { text: 'Guardando...', bg: 'bg-yellow-500/80' } : { text: 'Guardado ✓', bg: 'bg-green-500/80' };
+        return <div className={`fixed top-20 right-8 z-50 px-4 py-2 rounded-md text-white text-sm ${config.bg} transition-opacity duration-300`}>{config.text}</div>
     }
     
-    const isMonthly = configData?.paymentFrequency === 'monthly';
-
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-16 relative">
             <SaveStatusIndicator />
+            
+            {/* Floating Action Button */}
+            {configData && <FAB />}
+
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <h1 className="text-3xl font-bold text-white">Gastos</h1>
                 <MonthSelector currentDate={currentDate} setCurrentDate={setCurrentDate} />
@@ -713,8 +860,23 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
             
             {!loading && data && configData && (
                 <>
-                    <IntegratedSummary configData={configData} />
-                    <Resumen data={data} updateData={handleUpdateData} />
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                         <div className="lg:col-span-2">
+                             <Resumen data={data} updateData={handleUpdateData} />
+                         </div>
+                         <div className="lg:col-span-1 space-y-4">
+                             {/* Additional mini-stats or summary could go here if needed, currently empty space utilization */}
+                             <Card className="h-full flex flex-col justify-center items-center border border-gray-700">
+                                 <p className="text-sm text-gray-400 mb-2">Presupuesto Diario Sugerido (Restante)</p>
+                                 {/* Simple calc: (Income - Fixed) / Days left. Placeholder logic for now */}
+                                 <p className="text-3xl font-bold text-blue-400">
+                                     {formatCurrency((data.q1.ingresos.reduce((s,i)=>s+i.monto,0) + data.q2.ingresos.reduce((s,i)=>s+i.monto,0) - data.q1.egresos.reduce((s,e)=>s+e.monto,0) - data.q2.egresos.reduce((s,e)=>s+e.monto,0)) / 30)}
+                                 </p>
+                                 <p className="text-xs text-gray-600 mt-1">Promedio por día</p>
+                             </Card>
+                         </div>
+                    </div>
+
                     <div className="mt-8">
                         <div className="flex justify-between items-end border-b border-gray-700">
                            <div className="flex">
@@ -746,7 +908,17 @@ const Gastos: React.FC<ModuleProps> = ({ entityId }) => {
             {!loading && !data && (
                  <div>No data found for this month.</div>
             )}
+            
             {isCopyModalOpen && <CopyMonthModal onCopy={handleCopyMonth} onClose={() => setCopyModalOpen(false)} currentDate={currentDate} />}
+            
+            {isQuickAddOpen && configData && (
+                <QuickAddModal 
+                    onClose={() => setIsQuickAddOpen(false)} 
+                    entityId={entityId} 
+                    configData={configData}
+                    updateConfigData={handleUpdateConfigData}
+                />
+            )}
         </div>
     );
 };
@@ -763,7 +935,6 @@ const CopyMonthModal: React.FC<{
         const uniqueMonths = new Set<string>();
         for (let i = -12; i <= 12; i++) {
             if (i === 0) continue; 
-
             const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
             const yearMonth = getYearMonth(date);
             if (!uniqueMonths.has(yearMonth)) {

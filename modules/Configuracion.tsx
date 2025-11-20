@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useFirestoreDoc } from '../hooks/useFirestoreDoc';
 import { initialConfigData } from '../data/initialData';
-import type { ConfigData, BudgetVariableIngreso, BudgetVariableEgreso, Debt, FinancialGoal, SavingsGoal } from '../types';
+import type { ConfigData, BudgetVariableIngreso, BudgetVariableEgreso, Debt, FinancialGoal } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { Card } from '../components/common/Card';
 import { Spinner } from '../components/common/Spinner';
@@ -10,6 +10,7 @@ import { EditIcon, CheckIcon, XIcon, TrashIcon } from '../components/Icons';
 import { getConfigHistoryDocRef } from '../services/firebaseService';
 import { setDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
+import { CurrencyInput } from '../components/common/CurrencyInput';
 
 interface ModuleProps {
     entityId: string;
@@ -115,14 +116,20 @@ const BudgetVariableForm: React.FC<{ item: any; onSave: (item: any) => void; onC
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Monto Mensual</label>
-                    <input type="number" value={formState.totalAmount} onChange={e => setFormState({...formState, totalAmount: Number(e.target.value)})} className="bg-gray-700 text-white rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none" />
+                    <CurrencyInput value={formState.totalAmount} onChange={val => setFormState({...formState, totalAmount: val})} className="bg-gray-700 text-white rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none" />
                 </div>
                  {'category' in formState && (
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Categoría</label>
-                        <select value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} className="bg-gray-700 text-white rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none">
-                            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                        </select>
+                     <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Categoría</label>
+                            <select value={formState.category} onChange={e => setFormState({...formState, category: e.target.value})} className="bg-gray-700 text-white rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none">
+                                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                             <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Día Pago (Tentativo)</label>
+                             <input type="number" min="1" max="31" value={formState.paymentDay || ''} onChange={e => setFormState({...formState, paymentDay: parseInt(e.target.value)})} placeholder="Ej: 5" className="bg-gray-700 text-white rounded px-3 py-2 w-full border border-gray-600 focus:border-blue-500 outline-none" />
+                        </div>
                     </div>
                 )}
             </>
@@ -172,7 +179,10 @@ const CategoryList: React.FC<{ categories: string[], onUpdate: (cats: string[]) 
 const renderBudgetVariable = (item: BudgetVariableIngreso | BudgetVariableEgreso) => (
     <div>
         <span className="font-medium text-white">{item.name}</span>
-        {'category' in item && <span className="text-xs text-gray-400 ml-2 bg-gray-800 border border-gray-700 px-1.5 py-0.5 rounded">{item.category}</span>}
+        <div className="flex gap-2 mt-1">
+             {'category' in item && <span className="text-xs text-gray-400 bg-gray-800 border border-gray-700 px-1.5 py-0.5 rounded">{item.category}</span>}
+             {'paymentDay' in item && item.paymentDay && <span className="text-xs text-blue-400 bg-blue-900/20 border border-blue-800 px-1.5 py-0.5 rounded">Día {item.paymentDay}</span>}
+        </div>
         <span className="block text-sm text-gray-400 font-mono mt-1">{formatCurrency(item.totalAmount)}</span>
     </div>
 );
@@ -181,7 +191,12 @@ const renderDebt = (item: Debt) => (
     <div>
         <span className="font-bold text-white block">{item.name}</span>
         <span className="text-sm text-gray-400">Total: {formatCurrency(item.totalAmount)}</span>
-        {item.interestRate && <span className="text-xs text-yellow-500 ml-2">({item.interestRate}% EA)</span>}
+        <div className="flex gap-2 mt-1">
+            {item.interestRate > 0 && <span className="text-xs text-yellow-500">({item.interestRate}% EA)</span>}
+            {item.monthsInArrears && item.monthsInArrears > 0 ? (
+                <span className="text-xs text-red-500 font-bold">Mora: {item.monthsInArrears} meses</span>
+            ) : null}
+        </div>
     </div>
 );
 const DebtForm = ({ item, onSave, onCancel }: any) => (
@@ -194,11 +209,11 @@ const DebtForm = ({ item, onSave, onCancel }: any) => (
             <div className="grid grid-cols-2 gap-2">
                 <div>
                      <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Deuda Total</label>
-                     <input type="number" value={formState.totalAmount} onChange={e => setFormState({...formState, totalAmount: Number(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+                     <CurrencyInput value={formState.totalAmount} onChange={val => setFormState({...formState, totalAmount: val})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
                 </div>
                 <div>
                      <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Ya Pagado</label>
-                     <input type="number" value={formState.paidAmount} onChange={e => setFormState({...formState, paidAmount: Number(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+                     <CurrencyInput value={formState.paidAmount} onChange={val => setFormState({...formState, paidAmount: val})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
                 </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -209,6 +224,16 @@ const DebtForm = ({ item, onSave, onCancel }: any) => (
                 <div>
                      <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Tasa Interés Anual (%)</label>
                      <input type="number" value={formState.interestRate} onChange={e => setFormState({...formState, interestRate: Number(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" placeholder="Ej: 12.5" />
+                </div>
+            </div>
+             <div className="grid grid-cols-2 gap-2">
+                <div>
+                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Día Pago Mensual</label>
+                     <input type="number" min="1" max="31" value={formState.dueDate || ''} onChange={e => setFormState({...formState, dueDate: parseInt(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" placeholder="Ej: 15" />
+                </div>
+                <div>
+                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Meses en Mora</label>
+                     <input type="number" min="0" value={formState.monthsInArrears || 0} onChange={e => setFormState({...formState, monthsInArrears: parseInt(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
                 </div>
             </div>
             <div>
@@ -234,7 +259,7 @@ const FinancialGoalForm = ({ item, onSave, onCancel }: any) => (
             </div>
             <div>
                  <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Monto Objetivo</label>
-                 <input type="number" value={formState.targetAmount} onChange={e => setFormState({...formState, targetAmount: Number(e.target.value)})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
+                 <CurrencyInput value={formState.targetAmount} onChange={val => setFormState({...formState, targetAmount: val})} className="bg-gray-700 w-full p-2 rounded border border-gray-600 text-white" />
             </div>
             <div>
                  <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Notas</label>

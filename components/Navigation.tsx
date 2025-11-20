@@ -1,7 +1,7 @@
 
 import React from 'react';
 import type { Module } from '../types';
-import { HomeIcon, DollarSignIcon, TargetIcon, CreditCardIcon, MenuIcon, XIcon, SettingsIcon } from './Icons';
+import { HomeIcon, DollarSignIcon, TargetIcon, CreditCardIcon, MenuIcon, XIcon, SettingsIcon, UserIcon } from './Icons';
 
 interface NavItemProps {
     icon: React.ReactNode;
@@ -28,13 +28,14 @@ interface NavigationProps {
     activeEntityName: string;
     onSwitchEntity: () => void;
     onSignOut: () => void;
+    onOpenProfile: () => void; // NEW PROP
     activeModule: Module;
     setActiveModule: (module: Module) => void;
     isSidebarOpen: boolean;
     setSidebarOpen: (isOpen: boolean) => void;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ activeEntityName, onSwitchEntity, onSignOut, activeModule, setActiveModule, isSidebarOpen, setSidebarOpen }) => {
+const Navigation: React.FC<NavigationProps> = ({ activeEntityName, onSwitchEntity, onSignOut, onOpenProfile, activeModule, setActiveModule, isSidebarOpen, setSidebarOpen }) => {
 
     const navItems: { id: Module; label: string; icon: React.ReactNode }[] = [
         { id: 'resumen', label: 'Resumen General', icon: <HomeIcon className="w-5 h-5" /> },
@@ -76,7 +77,16 @@ const Navigation: React.FC<NavigationProps> = ({ activeEntityName, onSwitchEntit
                 ))}
             </nav>
             <div className="p-4 border-t border-gray-700 space-y-2">
-                <div className="text-sm text-gray-400 truncate">Entidad: <span className="font-bold text-white">{activeEntityName}</span></div>
+                <div className="text-sm text-gray-400 truncate mb-2">Entidad: <span className="font-bold text-white">{activeEntityName}</span></div>
+                
+                {/* Profile Button */}
+                <button 
+                    onClick={onOpenProfile}
+                    className="w-full flex items-center px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg mb-1 transition-colors"
+                >
+                    <UserIcon className="w-4 h-4 mr-2" /> Perfil / Cuenta
+                </button>
+
                 <button 
                     onClick={onSwitchEntity}
                     className="w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-gray-700 rounded-lg"
