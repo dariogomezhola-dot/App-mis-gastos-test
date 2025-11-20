@@ -1,6 +1,7 @@
 
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import type { Module } from '../types';
 
 const firebaseConfig = {
@@ -18,6 +19,8 @@ const app = initializeApp(firebaseConfig);
 
 // Export singleton instances of Firebase services
 export const db = getFirestore(app);
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
 
 export const appId = firebaseConfig.projectId;
 

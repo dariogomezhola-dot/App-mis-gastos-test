@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Module } from '../types';
 import { HomeIcon, DollarSignIcon, BriefcaseIcon, PlaneIcon, CreditCardIcon, MenuIcon, XIcon, SettingsIcon } from './Icons';
@@ -26,13 +27,14 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick }) => 
 interface NavigationProps {
     activeEntityName: string;
     onSwitchEntity: () => void;
+    onSignOut: () => void;
     activeModule: Module;
     setActiveModule: (module: Module) => void;
     isSidebarOpen: boolean;
     setSidebarOpen: (isOpen: boolean) => void;
 }
 
-const Navigation: React.FC<NavigationProps> = ({ activeEntityName, onSwitchEntity, activeModule, setActiveModule, isSidebarOpen, setSidebarOpen }) => {
+const Navigation: React.FC<NavigationProps> = ({ activeEntityName, onSwitchEntity, onSignOut, activeModule, setActiveModule, isSidebarOpen, setSidebarOpen }) => {
 
     const navItems: { id: Module; label: string; icon: React.ReactNode }[] = [
         { id: 'resumen', label: 'Resumen General', icon: <HomeIcon className="w-5 h-5" /> },
@@ -74,13 +76,19 @@ const Navigation: React.FC<NavigationProps> = ({ activeEntityName, onSwitchEntit
                     />
                 ))}
             </nav>
-            <div className="p-4 border-t border-gray-700">
-                <div className="text-sm text-gray-400 truncate mb-2">Entidad: <span className="font-bold text-white">{activeEntityName}</span></div>
+            <div className="p-4 border-t border-gray-700 space-y-2">
+                <div className="text-sm text-gray-400 truncate">Entidad: <span className="font-bold text-white">{activeEntityName}</span></div>
                 <button 
                     onClick={onSwitchEntity}
                     className="w-full text-left px-4 py-2 text-sm text-yellow-400 hover:bg-gray-700 rounded-lg"
                 >
                     Cambiar Entidad
+                </button>
+                <button 
+                    onClick={onSignOut}
+                    className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700 rounded-lg"
+                >
+                    Cerrar Sesión
                 </button>
             </div>
         </div>

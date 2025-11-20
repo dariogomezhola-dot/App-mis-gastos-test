@@ -7,9 +7,11 @@ import Viaje from './modules/Viaje';
 import Deudas from './modules/Deudas';
 import ResumenGeneral from './modules/ResumenGeneral';
 import Configuracion from './modules/Configuracion';
+import Login from './components/Login';
 import { Spinner } from './components/common/Spinner';
-import { db } from './services/firebaseService';
-import { collection, getDocs, addDoc, setDoc } from 'firebase/firestore';
+import { db, auth } from './services/firebaseService';
+import { collection, getDocs, addDoc, setDoc, query, where } from 'firebase/firestore';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import type { Module, ConfigData } from './types';
 import { EntitySelector } from './components/EntitySelector';
 import { blankGastosData } from './data/initialData';
@@ -21,17 +23,39 @@ interface Entity {
 }
 
 const App: React.FC = () => {
+    const [user, setUser] = useState<User | null>(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    
     const [entities, setEntities] = useState<Entity[]>([]);
     const [activeEntity, setActiveEntity] = useState<Entity | null>(null);
-    const [entitiesLoading, setEntitiesLoading] = useState(true);
+    const [entitiesLoading, setEntitiesLoading] = useState(false);
     const [activeModule, setActiveModule] = useState<Module>('resumen');
     const [isSidebarOpen, setSidebarOpen] = useState(false);
     
+    // Auth Listener
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+            setAuthLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Load Entities for User
     useEffect(() => {
         const loadEntities = async () => {
+            if (!user) {
+                setEntities([]);
+                setActiveEntity(null);
+                return;
+            }
+
             setEntitiesLoading(true);
             try {
-                const querySnapshot = await getDocs(collection(db, 'entities'));
+                // IMPORTANT: Filter entities by ownerId
+                const q = query(collection(db, 'entities'), where('ownerId', '==', user.uid));
+                const querySnapshot = await getDocs(q);
+                
                 const fetchedEntities: Entity[] = [];
                 querySnapshot.forEach((doc) => {
                     fetchedEntities.push({ id: doc.id, name: doc.data().name as string });
@@ -51,8 +75,11 @@ const App: React.FC = () => {
                 setEntitiesLoading(false);
             }
         };
-        loadEntities();
-    }, []);
+        
+        if (!authLoading) {
+            loadEntities();
+        }
+    }, [user, authLoading]);
 
     useEffect(() => {
         if (typeof (window as any).feather !== 'undefined') {
@@ -69,8 +96,13 @@ const App: React.FC = () => {
     };
 
     const handleCreateEntity = async (name: string, template: ConfigData) => {
+        if (!user) return;
+
         try {
-            const docRef = await addDoc(collection(db, 'entities'), { name });
+            const docRef = await addDoc(collection(db, 'entities'), { 
+                name,
+                ownerId: user.uid // Secure ownership
+            });
             const newEntity = { id: docRef.id, name };
             
             const configDocRef = getDataDocRef(newEntity.id, 'configuracion');
@@ -93,6 +125,15 @@ const App: React.FC = () => {
         setActiveEntity(null);
     };
 
+    const handleSignOut = async () => {
+        try {
+            await signOut(auth);
+            handleSwitchEntity();
+        } catch (error) {
+            console.error("Error signing out", error);
+        }
+    };
+
     const renderModule = () => {
         if (!activeEntity) return null;
         switch (activeModule) {
@@ -113,10 +154,25 @@ const App: React.FC = () => {
         }
     };
     
-    if (entitiesLoading) {
+    if (authLoading) {
         return (
             <div className="flex items-center justify-center h-screen bg-gray-900">
                 <Spinner />
+            </div>
+        );
+    }
+
+    if (!user) {
+        return <Login />;
+    }
+    
+    if (entitiesLoading) {
+         return (
+            <div className="flex items-center justify-center h-screen bg-gray-900">
+                <div className="text-center">
+                    <Spinner />
+                    <p className="text-gray-400 mt-4">Cargando tus espacios...</p>
+                </div>
             </div>
         );
     }
@@ -135,6 +191,7 @@ const App: React.FC = () => {
             <Navigation 
                 activeEntityName={activeEntity.name}
                 onSwitchEntity={handleSwitchEntity}
+                onSignOut={handleSignOut}
                 activeModule={activeModule} 
                 setActiveModule={setActiveModule} 
                 isSidebarOpen={isSidebarOpen}
